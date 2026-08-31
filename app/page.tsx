@@ -193,7 +193,12 @@ export default async function DashboardPage({
                           className="flex items-center justify-between gap-4 py-2.5 text-sm hover:text-foreground"
                         >
                           <span className="truncate font-medium">{project.name}</span>
-                          <span className="truncate text-xs text-muted-foreground">{project.stack}</span>
+                          <span className="flex shrink-0 items-center gap-4 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                            <span className="hidden sm:inline">{project.stack}</span>
+                            <time dateTime={project.lastActivityAt.toISOString()}>
+                              Last activity {formatDate(project.lastActivityAt)}
+                            </time>
+                          </span>
                         </Link>
                       ))}
                     </div>
@@ -337,14 +342,30 @@ function ProjectGroup({ title, projects }: { title: string; projects: Project[] 
               <Link href={`/projects/${project.id}`} className="font-semibold tracking-tight underline-offset-4 hover:underline">
                 {project.name}
               </Link>
-              <span className="shrink-0 rounded-sm border border-border px-2 py-1 font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
-                {lifecycleStateLabel(project.lifecycleState)}
-              </span>
+              <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+                {project.momentum ? (
+                  <span
+                    data-momentum={project.momentum}
+                    className="rounded-sm border border-foreground/20 bg-muted px-2 py-1 font-mono text-[9px] uppercase tracking-[0.14em]"
+                  >
+                    {project.momentum}
+                  </span>
+                ) : null}
+                <span className="rounded-sm border border-border px-2 py-1 font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
+                  {lifecycleStateLabel(project.lifecycleState)}
+                </span>
+              </div>
             </div>
             <p className="mt-3 line-clamp-2 text-sm leading-6 text-muted-foreground">{project.description}</p>
             <p className="mt-4 truncate font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
               {project.stack || "Stack not set"}
             </p>
+            <time
+              dateTime={project.lastActivityAt.toISOString()}
+              className="mt-2 block font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground"
+            >
+              Last activity {formatDate(project.lastActivityAt)}
+            </time>
             {project.repositoryUrl || project.deployedUrl ? (
               <div className="mt-3 flex flex-wrap gap-4">
                 {project.repositoryUrl ? (

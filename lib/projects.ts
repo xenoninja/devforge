@@ -1,7 +1,8 @@
 import { and, desc, eq } from "drizzle-orm";
 
+import { momentumFor, type ActivitySource, type Momentum } from "@/lib/activity";
 import { getDatabase } from "@/lib/db";
-import { ideas, lifecycleStateChanges, projects as projectsTable } from "@/lib/db/schema";
+import { activities, ideas, lifecycleStateChanges, projects as projectsTable } from "@/lib/db/schema";
 
 export const lifecycleStates = [
   { value: "exploring", label: "Exploring" },
@@ -12,12 +13,21 @@ export const lifecycleStates = [
 ] as const;
 
 export type LifecycleState = (typeof lifecycleStates)[number]["value"];
-export type Project = typeof projectsTable.$inferSelect;
+type StoredProject = typeof projectsTable.$inferSelect;
+export type Project = StoredProject & { momentum: Momentum | null };
 
 export class ProjectInputError extends Error {}
 
-export async function listProjects() {
-  return getDatabase().select().from(projectsTable).orderBy(desc(projectsTable.createdAt));
+const lifecycleStateActivitySource: ActivitySource = "lifecycle_state";
+
+export async function listProjects(): Promise<Project[]> {
+  const projects = await getDatabase().select().from(projectsTable).orderBy(desc(projectsTable.lastActivityAt));
+  const now = new Date();
+
+  return projects.map((project) => ({
+    ...project,
+    momentum: momentumFor(project.lifecycleState, project.lastActivityAt, now),
+  }));
 }
 
 export async function getProject(id: string) {
@@ -93,11 +103,11 @@ export async function changeLifecycleState(id: string, lifecycleState: string, n
   const projectId = requireId(id, "Project");
   const nextState = requireLifecycleState(lifecycleState);
   const database = getDatabase();
-
+  const now = new Date();
   await database.transaction(async (transaction) => {
     const [project] = await transaction
       .update(projectsTable)
-      .set({ lifecycleState: nextState, updatedAt: new Date() })
+      .set({ lifecycleState: nextState, lastActivityAt: now, updatedAt: now })
       .where(eq(projectsTable.id, projectId))
       .returning({ id: projectsTable.id });
 
@@ -107,6 +117,12 @@ export async function changeLifecycleState(id: string, lifecycleState: string, n
       projectId,
       lifecycleState: nextState,
       note: note.trim(),
+    });
+
+    await transaction.insert(activities).values({
+      projectId,
+      source: lifecycleStateActivitySource,
+      createdAt: now,
     });
   });
 }
@@ -130,6 +146,7 @@ async function insertProject(
     originIdeaId?: string;
   },
 ) {
+  const now = new Date();
   const [createdProject] = await transaction
     .insert(projectsTable)
     .values({
@@ -140,6 +157,7 @@ async function insertProject(
       stack: project.stack,
       lifecycleState: project.lifecycleState,
       originIdeaId: project.originIdeaId,
+      lastActivityAt: now,
     })
     .returning({ id: projectsTable.id });
 
@@ -147,6 +165,12 @@ async function insertProject(
     projectId: createdProject.id,
     lifecycleState: project.lifecycleState,
     note: project.note,
+  });
+
+  await transaction.insert(activities).values({
+    projectId: createdProject.id,
+    source: lifecycleStateActivitySource,
+    createdAt: now,
   });
 
   return createdProject.id;

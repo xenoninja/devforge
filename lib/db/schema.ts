@@ -36,11 +36,25 @@ export const projects = pgTable(
     originIdeaId: uuid("origin_idea_id").references(() => ideas.id),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    lastActivityAt: timestamp("last_activity_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index("projects_lifecycle_state_created_at_idx").on(table.lifecycleState, table.createdAt),
     uniqueIndex("projects_origin_idea_id_idx").on(table.originIdeaId),
   ],
+);
+
+export const activities = pgTable(
+  "activities",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    source: text("source").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("activities_project_created_at_idx").on(table.projectId, table.createdAt)],
 );
 
 export const lifecycleStateChanges = pgTable(
