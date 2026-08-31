@@ -77,12 +77,12 @@ test("visitor can log in and manage the Idea Inbox", async () => {
     assert.equal(response.headers.get("location"), "/");
   };
 
-  await createIdea("First smoke idea", "");
+  await createIdea("First smoke idea", "Starting material notes");
   await createIdea("Second smoke idea", "Newer notes");
 
   const populated = await fetch(baseUrl, { headers: { cookie: sessionCookie } });
   const populatedHtml = await populated.text();
-  assert.ok(populatedHtml.indexOf("Second smoke idea") < populatedHtml.indexOf("First smoke idea"));
+  assert.ok(populatedHtml.indexOf("Second smoke idea") < populatedHtml.lastIndexOf("First smoke idea"));
   assert.match(populatedHtml, /Newer notes/);
 
   const secondIdeaId = populatedHtml.match(
@@ -106,6 +106,39 @@ test("visitor can log in and manage the Idea Inbox", async () => {
   const revised = await fetch(baseUrl, { headers: { cookie: sessionCookie } });
   assert.match(await revised.text(), /Second smoke idea, revised[\s\S]*Notes revised across sittings/);
 
+  const firstIdeaId = populatedHtml.match(
+    /<article[^>]*data-idea-id="([^"]+)"[^>]*>(?:(?!<\/article>)[\s\S])*?First smoke idea/,
+  )?.[1];
+  assert.ok(firstIdeaId);
+
+  const invalidPromotion = await fetch(`${baseUrl}/api/ideas`, {
+    method: "POST",
+    headers: { cookie: sessionCookie },
+    body: new URLSearchParams({ action: "promote", id: firstIdeaId, lifecycleState: "automatic" }),
+    redirect: "manual",
+  });
+  assert.equal(invalidPromotion.status, 400);
+
+  const promoted = await fetch(`${baseUrl}/api/ideas`, {
+    method: "POST",
+    headers: { cookie: sessionCookie },
+    body: new URLSearchParams({ action: "promote", id: firstIdeaId, lifecycleState: "exploring" }),
+    redirect: "manual",
+  });
+  assert.equal(promoted.status, 303);
+  assert.match(promoted.headers.get("location") ?? "", /^\/projects\/[0-9a-f-]+$/);
+
+  const promotedProject = await fetch(new URL(promoted.headers.get("location"), baseUrl), {
+    headers: { cookie: sessionCookie },
+  });
+  const promotedProjectHtml = await promotedProject.text();
+  assert.match(promotedProjectHtml, /First smoke idea/);
+  assert.match(promotedProjectHtml, /Starting material notes/);
+  assert.match(promotedProjectHtml, /Exploring/);
+  assert.match(promotedProjectHtml, /Origin Idea/);
+  assert.match(promotedProjectHtml, new RegExp(`\\/\\?view=archived#idea-${firstIdeaId}`));
+
+
   const discarded = await fetch(`${baseUrl}/api/ideas`, {
     method: "POST",
     headers: { cookie: sessionCookie },
@@ -115,7 +148,10 @@ test("visitor can log in and manage the Idea Inbox", async () => {
   assert.equal(discarded.status, 303);
 
   const inbox = await fetch(baseUrl, { headers: { cookie: sessionCookie } });
-  assert.doesNotMatch(await inbox.text(), /Second smoke idea, revised/);
+  const inboxHtml = await inbox.text();
+  assert.doesNotMatch(inboxHtml, /Second smoke idea, revised/);
+  assert.doesNotMatch(inboxHtml, new RegExp(`data-idea-id="${firstIdeaId}"`));
+
 
   const archived = await fetch(`${baseUrl}/?view=archived`, {
     headers: { cookie: sessionCookie },
@@ -123,4 +159,6 @@ test("visitor can log in and manage the Idea Inbox", async () => {
   const archivedHtml = await archived.text();
   assert.match(archivedHtml, /Second smoke idea, revised/);
   assert.match(archivedHtml, /Discarded/);
+  assert.match(archivedHtml, /First smoke idea/);
+  assert.match(archivedHtml, /Promoted/);
 });

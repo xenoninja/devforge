@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { captureIdea, discardIdea, editIdea, IdeaInputError } from "@/lib/ideas";
+import { ProjectInputError, promoteIdea } from "@/lib/projects";
 
 export async function POST(request: NextRequest) {
   const form = await request.formData();
@@ -17,11 +18,18 @@ export async function POST(request: NextRequest) {
       case "discard":
         await discardIdea(field(form, "id"));
         break;
+      case "promote": {
+        const projectId = await promoteIdea(field(form, "id"), field(form, "lifecycleState"));
+        return new NextResponse(null, {
+          headers: { location: `/projects/${projectId}` },
+          status: 303,
+        });
+      }
       default:
         return new NextResponse("Unknown Idea action", { status: 400 });
     }
   } catch (error) {
-    if (error instanceof IdeaInputError) {
+    if (error instanceof IdeaInputError || error instanceof ProjectInputError) {
       return new NextResponse(error.message, { status: 400 });
     }
     throw error;

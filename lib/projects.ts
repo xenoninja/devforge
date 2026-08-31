@@ -1,7 +1,7 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 import { getDatabase } from "@/lib/db";
-import { lifecycleStateChanges, projects as projectsTable } from "@/lib/db/schema";
+import { ideas, lifecycleStateChanges, projects as projectsTable } from "@/lib/db/schema";
 
 export const lifecycleStates = [
   { value: "exploring", label: "Exploring" },
@@ -21,7 +21,7 @@ export async function listProjects() {
 }
 
 export async function getProject(id: string) {
-  const projectId = requireProjectId(id);
+  const projectId = requireId(id, "Project");
   const database = getDatabase();
   const [project] = await database.select().from(projectsTable).where(eq(projectsTable.id, projectId)).limit(1);
 
@@ -32,8 +32,11 @@ export async function getProject(id: string) {
     .from(lifecycleStateChanges)
     .where(eq(lifecycleStateChanges.projectId, projectId))
     .orderBy(desc(lifecycleStateChanges.createdAt));
+  const [originIdea] = project.originIdeaId
+    ? await database.select().from(ideas).where(eq(ideas.id, project.originIdeaId)).limit(1)
+    : [];
 
-  return { project, changes };
+  return { project, changes, originIdea: originIdea ?? null };
 }
 
 export async function createProject(input: {
@@ -45,33 +48,49 @@ export async function createProject(input: {
   lifecycleState: string;
   note: string;
 }) {
-  const name = requireText(input.name, "A Project name is required");
-  const description = requireText(input.description, "A Project description is required");
-  const repositoryUrl = requireWebUrl(input.repositoryUrl, "A valid repository URL is required");
-  const deployedUrl = input.deployedUrl.trim()
-    ? requireWebUrl(input.deployedUrl, "A valid deployed URL is required")
-    : null;
-  const stack = requireText(input.stack, "A stack line is required");
-  const lifecycleState = requireLifecycleState(input.lifecycleState);
+  const project = {
+    name: requireText(input.name, "A Project name is required"),
+    description: requireText(input.description, "A Project description is required"),
+    repositoryUrl: requireWebUrl(input.repositoryUrl, "A valid repository URL is required"),
+    deployedUrl: input.deployedUrl.trim()
+      ? requireWebUrl(input.deployedUrl, "A valid deployed URL is required")
+      : null,
+    stack: requireText(input.stack, "A stack line is required"),
+    lifecycleState: requireLifecycleState(input.lifecycleState),
+    note: input.note.trim(),
+  };
+
+  return getDatabase().transaction((transaction) => insertProject(transaction, project));
+}
+
+export async function promoteIdea(id: string, lifecycleState: string) {
+  const ideaId = requireId(id, "Idea");
+  const selectedState = requireLifecycleState(lifecycleState);
 
   return getDatabase().transaction(async (transaction) => {
-    const [project] = await transaction
-      .insert(projectsTable)
-      .values({ name, description, repositoryUrl, deployedUrl, stack, lifecycleState })
-      .returning({ id: projectsTable.id });
+    const [idea] = await transaction
+      .update(ideas)
+      .set({ state: "promoted", updatedAt: new Date() })
+      .where(and(eq(ideas.id, ideaId), eq(ideas.state, "inbox")))
+      .returning({ id: ideas.id, title: ideas.title, notes: ideas.notes });
 
-    await transaction.insert(lifecycleStateChanges).values({
-      projectId: project.id,
-      lifecycleState,
-      note: input.note.trim(),
+    if (!idea) throw new ProjectInputError("Idea not found in inbox");
+
+    return insertProject(transaction, {
+      name: idea.title,
+      description: idea.notes,
+      repositoryUrl: "",
+      deployedUrl: null,
+      stack: "",
+      lifecycleState: selectedState,
+      note: "Promoted from Idea",
+      originIdeaId: idea.id,
     });
-
-    return project.id;
   });
 }
 
 export async function changeLifecycleState(id: string, lifecycleState: string, note: string) {
-  const projectId = requireProjectId(id);
+  const projectId = requireId(id, "Project");
   const nextState = requireLifecycleState(lifecycleState);
   const database = getDatabase();
 
@@ -96,6 +115,43 @@ export function lifecycleStateLabel(state: LifecycleState) {
   return lifecycleStates.find((candidate) => candidate.value === state)?.label ?? state;
 }
 
+type ProjectTransaction = Parameters<Parameters<ReturnType<typeof getDatabase>["transaction"]>[0]>[0];
+
+async function insertProject(
+  transaction: ProjectTransaction,
+  project: {
+    name: string;
+    description: string;
+    repositoryUrl: string;
+    deployedUrl: string | null;
+    stack: string;
+    lifecycleState: LifecycleState;
+    note: string;
+    originIdeaId?: string;
+  },
+) {
+  const [createdProject] = await transaction
+    .insert(projectsTable)
+    .values({
+      name: project.name,
+      description: project.description,
+      repositoryUrl: project.repositoryUrl,
+      deployedUrl: project.deployedUrl,
+      stack: project.stack,
+      lifecycleState: project.lifecycleState,
+      originIdeaId: project.originIdeaId,
+    })
+    .returning({ id: projectsTable.id });
+
+  await transaction.insert(lifecycleStateChanges).values({
+    projectId: createdProject.id,
+    lifecycleState: project.lifecycleState,
+    note: project.note,
+  });
+
+  return createdProject.id;
+}
+
 function requireText(value: string, message: string) {
   const normalized = value.trim();
   if (!normalized) throw new ProjectInputError(message);
@@ -114,9 +170,9 @@ function requireWebUrl(value: string, message: string) {
   }
 }
 
-function requireProjectId(id: string) {
+function requireId(id: string, subject: "Idea" | "Project") {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
-    throw new ProjectInputError("A valid Project id is required");
+    throw new ProjectInputError(`A valid ${subject} id is required`);
   }
   return id;
 }

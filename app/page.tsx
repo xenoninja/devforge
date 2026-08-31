@@ -244,7 +244,7 @@ export default async function DashboardPage({
 
           <div className="divide-y divide-border">
             {ideas.map((idea) => (
-              <article key={idea.id} data-idea-id={idea.id} className="py-6">
+              <article id={`idea-${idea.id}`} key={idea.id} data-idea-id={idea.id} className="scroll-mt-6 py-6">
                 {view === "inbox" ? (
                   <form action="/api/ideas" method="post">
                     <input type="hidden" name="id" value={idea.id} />
@@ -271,7 +271,25 @@ export default async function DashboardPage({
                         >
                           Captured {formatDate(idea.createdAt)}
                         </time>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <label>
+                            <span className="sr-only">Initial Lifecycle State</span>
+                            <select
+                              name="lifecycleState"
+                              defaultValue="exploring"
+                              className="h-8 rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            >
+                              {lifecycleStates.map((state) => (
+                                <option key={state.value} value={state.value}>
+                                  {state.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <Button type="submit" name="action" value="promote" className="h-8 px-3 text-xs">
+                            <FolderGit2 aria-hidden="true" className="size-3.5" />
+                            Promote
+                          </Button>
                           <Button type="submit" name="action" value="edit" variant="outline" className="h-8 px-3 text-xs">
                             <Save aria-hidden="true" className="size-3.5" />
                             Save
@@ -325,28 +343,32 @@ function ProjectGroup({ title, projects }: { title: string; projects: Project[] 
             </div>
             <p className="mt-3 line-clamp-2 text-sm leading-6 text-muted-foreground">{project.description}</p>
             <p className="mt-4 truncate font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-              {project.stack}
+              {project.stack || "Stack not set"}
             </p>
-            <div className="mt-3 flex flex-wrap gap-4">
-              <a
-                href={project.repositoryUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 text-xs font-medium underline-offset-4 hover:underline"
-              >
-                Repository <ExternalLink aria-hidden="true" className="size-3" />
-              </a>
-              {project.deployedUrl ? (
-                <a
-                  href={project.deployedUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-xs font-medium underline-offset-4 hover:underline"
-                >
-                  Deployed <ExternalLink aria-hidden="true" className="size-3" />
-                </a>
-              ) : null}
-            </div>
+            {project.repositoryUrl || project.deployedUrl ? (
+              <div className="mt-3 flex flex-wrap gap-4">
+                {project.repositoryUrl ? (
+                  <a
+                    href={project.repositoryUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-xs font-medium underline-offset-4 hover:underline"
+                  >
+                    Repository <ExternalLink aria-hidden="true" className="size-3" />
+                  </a>
+                ) : null}
+                {project.deployedUrl ? (
+                  <a
+                    href={project.deployedUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-xs font-medium underline-offset-4 hover:underline"
+                  >
+                    Deployed <ExternalLink aria-hidden="true" className="size-3" />
+                  </a>
+                ) : null}
+              </div>
+            ) : null}
           </article>
         ))}
       </div>

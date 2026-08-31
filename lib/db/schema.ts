@@ -1,4 +1,4 @@
-import { index, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { index, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const ideaState = pgEnum("idea_state", ["inbox", "discarded", "promoted"]);
 
@@ -33,10 +33,14 @@ export const projects = pgTable(
     deployedUrl: text("deployed_url"),
     stack: text("stack").notNull(),
     lifecycleState: lifecycleState("lifecycle_state").notNull(),
+    originIdeaId: uuid("origin_idea_id").references(() => ideas.id),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index("projects_lifecycle_state_created_at_idx").on(table.lifecycleState, table.createdAt)],
+  (table) => [
+    index("projects_lifecycle_state_created_at_idx").on(table.lifecycleState, table.createdAt),
+    uniqueIndex("projects_origin_idea_id_idx").on(table.originIdeaId),
+  ],
 );
 
 export const lifecycleStateChanges = pgTable(

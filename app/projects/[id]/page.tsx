@@ -26,7 +26,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
   if (!result) notFound();
 
-  const { project, changes } = result;
+  const { project, changes, originIdea } = result;
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-6xl px-5 py-5 sm:px-8">
@@ -51,20 +51,36 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             </span>
           </div>
 
+          {originIdea ? (
+            <div className="border-b border-border py-5">
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Origin Idea</p>
+              <Link
+                href={`/?view=archived#idea-${originIdea.id}`}
+                className="mt-2 inline-flex text-sm font-medium underline-offset-4 hover:underline"
+              >
+                {originIdea.title}
+              </Link>
+            </div>
+          ) : null}
+
           <dl className="grid gap-6 border-b border-border py-7 sm:grid-cols-2">
             <div>
               <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Repository</dt>
-              <dd className="mt-2">
-                <a
-                  href={project.repositoryUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 text-sm font-medium underline-offset-4 hover:underline"
-                >
-                  <GitBranch aria-hidden="true" className="size-4" />
-                  {project.repositoryUrl}
-                  <ExternalLink aria-hidden="true" className="size-3" />
-                </a>
+              <dd className="mt-2 text-sm">
+                {project.repositoryUrl ? (
+                  <a
+                    href={project.repositoryUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 font-medium underline-offset-4 hover:underline"
+                  >
+                    <GitBranch aria-hidden="true" className="size-4" />
+                    {project.repositoryUrl}
+                    <ExternalLink aria-hidden="true" className="size-3" />
+                  </a>
+                ) : (
+                  <span className="text-muted-foreground">Not set</span>
+                )}
               </dd>
             </div>
             <div>
@@ -88,7 +104,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             </div>
             <div className="sm:col-span-2">
               <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Stack</dt>
-              <dd className="mt-2 text-sm">{project.stack}</dd>
+              <dd className="mt-2 text-sm">{project.stack || <span className="text-muted-foreground">Not set</span>}</dd>
             </div>
           </dl>
 
