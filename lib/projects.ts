@@ -2,7 +2,14 @@ import { and, desc, eq } from "drizzle-orm";
 
 import { momentumFor, type ActivitySource, type Momentum } from "@/lib/activity";
 import { getDatabase } from "@/lib/db";
-import { activities, ideas, lifecycleStateChanges, projects as projectsTable } from "@/lib/db/schema";
+import {
+  activities,
+  decisions,
+  ideas,
+  journalEntries,
+  lifecycleStateChanges,
+  projects as projectsTable,
+} from "@/lib/db/schema";
 
 export const lifecycleStates = [
   { value: "exploring", label: "Exploring" },
@@ -19,6 +26,24 @@ export type Project = StoredProject & { momentum: Momentum | null };
 export class ProjectInputError extends Error {}
 
 const lifecycleStateActivitySource: ActivitySource = "lifecycle_state";
+const journalEntryActivitySource: ActivitySource = "journal_entry";
+const decisionActivitySource: ActivitySource = "decision";
+
+export type ProjectStoryItem =
+  | {
+      type: "journal-entry";
+      id: string;
+      markdown: string;
+      createdAt: Date;
+      updatedAt: Date;
+    }
+  | {
+      type: "decision";
+      id: string;
+      decided: string;
+      rationale: string;
+      createdAt: Date;
+    };
 
 export async function listProjects(): Promise<Project[]> {
   const projects = await getDatabase().select().from(projectsTable).orderBy(desc(projectsTable.lastActivityAt));
@@ -47,6 +72,88 @@ export async function getProject(id: string) {
     : [];
 
   return { project, changes, originIdea: originIdea ?? null };
+}
+
+export async function listProjectStory(id: string): Promise<ProjectStoryItem[]> {
+  const projectId = requireId(id, "Project");
+  const database = getDatabase();
+  const [entries, projectDecisions] = await Promise.all([
+    database.select().from(journalEntries).where(eq(journalEntries.projectId, projectId)),
+    database.select().from(decisions).where(eq(decisions.projectId, projectId)),
+  ]);
+
+  return [
+    ...entries.map((entry) => ({ ...entry, type: "journal-entry" as const })),
+    ...projectDecisions.map((decision) => ({ ...decision, type: "decision" as const })),
+  ].sort((left, right) => {
+    const byDate = right.createdAt.getTime() - left.createdAt.getTime();
+    return byDate || right.id.localeCompare(left.id);
+  });
+}
+
+export async function createJournalEntry(projectId: string, markdown: string) {
+  const id = requireId(projectId, "Project");
+  const content = requireText(markdown, "A Journal Entry is required");
+  const now = new Date();
+
+  return getDatabase().transaction(async (transaction) => {
+    await recordActivity(transaction, id, journalEntryActivitySource, now);
+    const [entry] = await transaction
+      .insert(journalEntries)
+      .values({ projectId: id, markdown: content, createdAt: now, updatedAt: now })
+      .returning({ id: journalEntries.id });
+    return entry.id;
+  });
+}
+
+export async function editJournalEntry(projectId: string, entryId: string, markdown: string) {
+  const id = requireId(projectId, "Project");
+  const journalEntryId = requireId(entryId, "Journal Entry");
+  const content = requireText(markdown, "A Journal Entry is required");
+  const now = new Date();
+
+  await getDatabase().transaction(async (transaction) => {
+    const [entry] = await transaction
+      .update(journalEntries)
+      .set({ markdown: content, updatedAt: now })
+      .where(and(eq(journalEntries.id, journalEntryId), eq(journalEntries.projectId, id)))
+      .returning({ id: journalEntries.id });
+
+    if (!entry) throw new ProjectInputError("Journal Entry not found");
+    await recordActivity(transaction, id, journalEntryActivitySource, now);
+  });
+}
+
+export async function deleteJournalEntry(projectId: string, entryId: string) {
+  const id = requireId(projectId, "Project");
+  const journalEntryId = requireId(entryId, "Journal Entry");
+  const now = new Date();
+
+  await getDatabase().transaction(async (transaction) => {
+    const [entry] = await transaction
+      .delete(journalEntries)
+      .where(and(eq(journalEntries.id, journalEntryId), eq(journalEntries.projectId, id)))
+      .returning({ id: journalEntries.id });
+
+    if (!entry) throw new ProjectInputError("Journal Entry not found");
+    await recordActivity(transaction, id, journalEntryActivitySource, now);
+  });
+}
+
+export async function createDecision(projectId: string, decided: string, rationale: string) {
+  const id = requireId(projectId, "Project");
+  const decision = requireText(decided, "What was decided is required");
+  const reason = requireText(rationale, "A rationale is required");
+  const now = new Date();
+
+  return getDatabase().transaction(async (transaction) => {
+    await recordActivity(transaction, id, decisionActivitySource, now);
+    const [created] = await transaction
+      .insert(decisions)
+      .values({ projectId: id, decided: decision, rationale: reason, createdAt: now })
+      .returning({ id: decisions.id });
+    return created.id;
+  });
 }
 
 export async function createProject(input: {
@@ -133,6 +240,22 @@ export function lifecycleStateLabel(state: LifecycleState) {
 
 type ProjectTransaction = Parameters<Parameters<ReturnType<typeof getDatabase>["transaction"]>[0]>[0];
 
+async function recordActivity(
+  transaction: ProjectTransaction,
+  projectId: string,
+  source: ActivitySource,
+  createdAt: Date,
+) {
+  const [project] = await transaction
+    .update(projectsTable)
+    .set({ lastActivityAt: createdAt, updatedAt: createdAt })
+    .where(eq(projectsTable.id, projectId))
+    .returning({ id: projectsTable.id });
+
+  if (!project) throw new ProjectInputError("Project not found");
+  await transaction.insert(activities).values({ projectId, source, createdAt });
+}
+
 async function insertProject(
   transaction: ProjectTransaction,
   project: {
@@ -194,7 +317,7 @@ function requireWebUrl(value: string, message: string) {
   }
 }
 
-function requireId(id: string, subject: "Idea" | "Project") {
+function requireId(id: string, subject: "Idea" | "Project" | "Journal Entry") {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
     throw new ProjectInputError(`A valid ${subject} id is required`);
   }

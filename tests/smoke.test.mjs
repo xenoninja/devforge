@@ -4,7 +4,7 @@ import test from "node:test";
 const baseUrl = process.env.SMOKE_BASE_URL ?? "http://127.0.0.1:3000";
 const password = process.env.DEVFORGE_PASSWORD ?? "devforge-smoke-password";
 
-test("visitor can log in and manage the Idea Inbox", async () => {
+test("visitor can manage Ideas and a Project story", async () => {
   const anonymous = await fetch(baseUrl, { redirect: "manual" });
   assert.equal(anonymous.status, 307);
   const anonymousLocation = new URL(anonymous.headers.get("location"), baseUrl);
@@ -137,6 +137,84 @@ test("visitor can log in and manage the Idea Inbox", async () => {
   assert.match(promotedProjectHtml, /Exploring/);
   assert.match(promotedProjectHtml, /Origin Idea/);
   assert.match(promotedProjectHtml, new RegExp(`\\/\\?view=archived#idea-${firstIdeaId}`));
+
+  const projectLocation = promoted.headers.get("location");
+  const projectId = projectLocation?.split("/").at(-1);
+  assert.ok(projectId);
+
+  const writeProjectStory = async (fields) => {
+    const response = await fetch(`${baseUrl}/api/projects`, {
+      method: "POST",
+      headers: { cookie: sessionCookie },
+      body: new URLSearchParams({ id: projectId, ...fields }),
+      redirect: "manual",
+    });
+    assert.equal(response.status, 303);
+    assert.equal(response.headers.get("location"), projectLocation);
+  };
+
+  await writeProjectStory({
+    action: "create-journal-entry",
+    markdown:
+      "Built **the parser**.\n\n```js\nconst safe = true;\n```\n\n[Reference](https://example.com)\n\n[Unsafe](javascript:alert('unsafe'))\n\n<script>alert('unsafe')</script>",
+  });
+  const missingRationale = await fetch(`${baseUrl}/api/projects`, {
+    method: "POST",
+    headers: { cookie: sessionCookie },
+    body: new URLSearchParams({
+      action: "create-decision",
+      id: projectId,
+      decided: "This should not be recorded",
+      rationale: "  ",
+    }),
+    redirect: "manual",
+  });
+  assert.equal(missingRationale.status, 400);
+
+  await writeProjectStory({
+    action: "create-decision",
+    decided: "Keep Journal Entries in Markdown",
+    rationale: "Portable text keeps the record durable.",
+  });
+  await writeProjectStory({
+    action: "create-journal-entry",
+    markdown: "Newest Journal Entry",
+  });
+
+  const storyPage = await fetch(new URL(projectLocation, baseUrl), {
+    headers: { cookie: sessionCookie },
+  });
+  const storyHtml = await storyPage.text();
+  assert.match(storyHtml, /<strong>the parser<\/strong>/);
+  assert.match(storyHtml, /<pre[^>]*><code class="language-js[^"]*">const safe = true;/);
+  assert.match(storyHtml, /href="https:\/\/example.com"/);
+  assert.doesNotMatch(storyHtml, /<script>alert\('unsafe'\)<\/script>/);
+  assert.doesNotMatch(storyHtml, /href="javascript:/);
+  assert.match(storyHtml, /Keep Journal Entries in Markdown[\s\S]*Portable text keeps the record durable\./);
+  assert.ok(storyHtml.indexOf("Newest Journal Entry") < storyHtml.indexOf("Keep Journal Entries in Markdown"));
+  assert.ok(storyHtml.indexOf("Keep Journal Entries in Markdown") < storyHtml.indexOf("Built"));
+
+  const journalEntryIds = [...storyHtml.matchAll(/data-story-type="journal-entry" data-story-id="([^"]+)"/g)].map(
+    (match) => match[1],
+  );
+  assert.equal(journalEntryIds.length, 2);
+
+  await writeProjectStory({
+    action: "edit-journal-entry",
+    entryId: journalEntryIds[1],
+    markdown: "Revised with ~~obsolete wording~~ clearer context.",
+  });
+  await writeProjectStory({
+    action: "delete-journal-entry",
+    entryId: journalEntryIds[0],
+  });
+
+  const revisedStory = await fetch(new URL(projectLocation, baseUrl), {
+    headers: { cookie: sessionCookie },
+  });
+  const revisedStoryHtml = await revisedStory.text();
+  assert.match(revisedStoryHtml, /Revised with/);
+  assert.doesNotMatch(revisedStoryHtml, /Newest Journal Entry/);
 
 
   const discarded = await fetch(`${baseUrl}/api/ideas`, {

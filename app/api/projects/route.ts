@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { changeLifecycleState, createProject, ProjectInputError } from "@/lib/projects";
+import {
+  changeLifecycleState,
+  createDecision,
+  createJournalEntry,
+  createProject,
+  deleteJournalEntry,
+  editJournalEntry,
+  ProjectInputError,
+} from "@/lib/projects";
 
 export async function POST(request: NextRequest) {
   const form = await request.formData();
@@ -23,6 +31,26 @@ export async function POST(request: NextRequest) {
       case "change-lifecycle-state": {
         const projectId = field(form, "id");
         await changeLifecycleState(projectId, field(form, "lifecycleState"), field(form, "note"));
+        return redirectToProject(projectId);
+      }
+      case "create-journal-entry": {
+        const projectId = field(form, "id");
+        await createJournalEntry(projectId, field(form, "markdown"));
+        return redirectToProject(projectId);
+      }
+      case "edit-journal-entry": {
+        const projectId = field(form, "id");
+        await editJournalEntry(projectId, field(form, "entryId"), field(form, "markdown"));
+        return redirectToProject(projectId);
+      }
+      case "delete-journal-entry": {
+        const projectId = field(form, "id");
+        await deleteJournalEntry(projectId, field(form, "entryId"));
+        return redirectToProject(projectId);
+      }
+      case "create-decision": {
+        const projectId = field(form, "id");
+        await createDecision(projectId, field(form, "decided"), field(form, "rationale"));
         return redirectToProject(projectId);
       }
       default:

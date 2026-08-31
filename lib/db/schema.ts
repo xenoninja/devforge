@@ -57,6 +57,34 @@ export const activities = pgTable(
   (table) => [index("activities_project_created_at_idx").on(table.projectId, table.createdAt)],
 );
 
+export const journalEntries = pgTable(
+  "journal_entries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    markdown: text("markdown").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("journal_entries_project_created_at_idx").on(table.projectId, table.createdAt)],
+);
+
+export const decisions = pgTable(
+  "decisions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    decided: text("decided").notNull(),
+    rationale: text("rationale").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("decisions_project_created_at_idx").on(table.projectId, table.createdAt)],
+);
+
 export const lifecycleStateChanges = pgTable(
   "lifecycle_state_changes",
   {
