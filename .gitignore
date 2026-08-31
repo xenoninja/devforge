@@ -1,0 +1,12 @@
+.scratch/
+AGENTS.md
+CLAUDE.md
+docs/
+/.DS_Store
+/CONTEXT.md
+data/
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
