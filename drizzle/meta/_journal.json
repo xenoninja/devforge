@@ -8,6 +8,13 @@
       "when": 1788163200000,
       "tag": "0000_walking_skeleton",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788168585545,
+      "tag": "0001_woozy_spirit",
+      "breakpoints": true
     }
   ]
 }
