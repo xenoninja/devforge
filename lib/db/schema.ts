@@ -1,4 +1,4 @@
-import { index, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, integer, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const ideaState = pgEnum("idea_state", ["inbox", "discarded", "promoted"]);
 
@@ -9,6 +9,8 @@ export const lifecycleState = pgEnum("lifecycle_state", [
   "maintenance",
   "shelved",
 ]);
+
+export const featureLane = pgEnum("feature_lane", ["now", "next", "later", "icebox"]);
 
 export const ideas = pgTable(
   "ideas",
@@ -44,6 +46,23 @@ export const projects = pgTable(
     index("projects_lifecycle_state_created_at_idx").on(table.lifecycleState, table.createdAt),
     uniqueIndex("projects_origin_idea_id_idx").on(table.originIdeaId),
   ],
+);
+
+export const features = pgTable(
+  "features",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    lane: featureLane("lane").notNull(),
+    done: boolean("done").notNull().default(false),
+    rank: integer("rank").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("features_project_lane_rank_idx").on(table.projectId, table.lane, table.rank)],
 );
 
 export const activities = pgTable(

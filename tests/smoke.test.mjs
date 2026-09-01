@@ -142,7 +142,7 @@ test("visitor can manage Ideas and a Project story", async () => {
   const projectId = projectLocation?.split("/").at(-1);
   assert.ok(projectId);
 
-  const writeProjectStory = async (fields) => {
+  const writeProject = async (fields) => {
     const response = await fetch(`${baseUrl}/api/projects`, {
       method: "POST",
       headers: { cookie: sessionCookie },
@@ -153,7 +153,133 @@ test("visitor can manage Ideas and a Project story", async () => {
     assert.equal(response.headers.get("location"), projectLocation);
   };
 
-  await writeProjectStory({
+  await writeProject({
+    action: "create-feature",
+    title: "Ship Feature roadmap",
+    lane: "now",
+  });
+  let roadmapPage = await fetch(new URL(projectLocation, baseUrl), {
+    headers: { cookie: sessionCookie },
+  });
+  let roadmapHtml = await roadmapPage.text();
+  assert.match(roadmapHtml, /Roadmap[\s\S]*Now[\s\S]*Ship Feature roadmap/);
+  const roadmapFeatureId = roadmapHtml.match(
+    /<article[^>]*data-feature-id="([^"]+)"[^>]*>(?:(?!<\/article>)[\s\S])*?Ship Feature roadmap/,
+  )?.[1];
+  assert.ok(roadmapFeatureId);
+
+  await writeProject({
+    action: "create-feature",
+    title: "Rank this Feature first",
+    lane: "now",
+  });
+  roadmapPage = await fetch(new URL(projectLocation, baseUrl), {
+    headers: { cookie: sessionCookie },
+  });
+  roadmapHtml = await roadmapPage.text();
+  const rankedFeatureId = roadmapHtml.match(
+    /<article[^>]*data-feature-id="([^"]+)"[^>]*>(?:(?!<\/article>)[\s\S])*?Rank this Feature first/,
+  )?.[1];
+  assert.ok(rankedFeatureId);
+
+  await writeProject({
+    action: "rank-feature",
+    featureId: rankedFeatureId,
+    direction: "up",
+  });
+  roadmapPage = await fetch(new URL(projectLocation, baseUrl), {
+    headers: { cookie: sessionCookie },
+  });
+  roadmapHtml = await roadmapPage.text();
+  assert.ok(roadmapHtml.indexOf("Rank this Feature first") < roadmapHtml.indexOf("Ship Feature roadmap"));
+  assert.ok(roadmapHtml.indexOf('data-lane="now"') < roadmapHtml.indexOf('data-lane="next"'));
+  assert.ok(roadmapHtml.indexOf('data-lane="next"') < roadmapHtml.indexOf('data-lane="later"'));
+  assert.ok(roadmapHtml.indexOf('data-lane="later"') < roadmapHtml.indexOf('data-lane="icebox"'));
+
+  const dashboardBeforeLane = await fetch(baseUrl, { headers: { cookie: sessionCookie } });
+  const dashboardBeforeLaneHtml = await dashboardBeforeLane.text();
+  const projectBeforeLane = dashboardBeforeLaneHtml.match(
+    new RegExp(`<article[^>]*data-project-id="${projectId}"[^>]*>[\\s\\S]*?<\\/article>`),
+  )?.[0];
+  assert.ok(projectBeforeLane);
+  const activityBeforeLane = projectBeforeLane.match(/data-last-activity="([^"]+)"/)?.[1];
+  assert.ok(activityBeforeLane);
+
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  await writeProject({
+    action: "edit-feature",
+    featureId: roadmapFeatureId,
+    title: "Ship Feature roadmap",
+    lane: "next",
+  });
+  const dashboardAfterLane = await fetch(baseUrl, { headers: { cookie: sessionCookie } });
+  const dashboardAfterLaneHtml = await dashboardAfterLane.text();
+  const projectAfterLane = dashboardAfterLaneHtml.match(
+    new RegExp(`<article[^>]*data-project-id="${projectId}"[^>]*>[\\s\\S]*?<\\/article>`),
+  )?.[0];
+  assert.ok(projectAfterLane);
+  const activityAfterLane = projectAfterLane.match(/data-last-activity="([^"]+)"/)?.[1];
+  assert.ok(activityAfterLane);
+  assert.ok(new Date(activityAfterLane) > new Date(activityBeforeLane));
+
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  await writeProject({
+    action: "edit-feature",
+    featureId: roadmapFeatureId,
+    title: "Ship the revised Feature roadmap",
+    lane: "next",
+    done: "on",
+  });
+  const dashboardAfterDone = await fetch(baseUrl, { headers: { cookie: sessionCookie } });
+  const dashboardAfterDoneHtml = await dashboardAfterDone.text();
+  const projectAfterDone = dashboardAfterDoneHtml.match(
+    new RegExp(`<article[^>]*data-project-id="${projectId}"[^>]*>[\\s\\S]*?<\\/article>`),
+  )?.[0];
+  assert.ok(projectAfterDone);
+  const activityAfterDone = projectAfterDone.match(/data-last-activity="([^"]+)"/)?.[1];
+  assert.ok(activityAfterDone);
+  assert.ok(new Date(activityAfterDone) > new Date(activityAfterLane));
+  assert.match(projectAfterDone, /data-momentum="Active"/);
+  assert.match(projectAfterDone, /data-feature-progress="0.5"/);
+
+  await writeProject({
+    action: "create-feature",
+    title: "Uncommitted Icebox Feature",
+    lane: "icebox",
+    done: "on",
+  });
+  const dashboardWithIcebox = await fetch(baseUrl, { headers: { cookie: sessionCookie } });
+  const dashboardWithIceboxHtml = await dashboardWithIcebox.text();
+  const projectWithIcebox = dashboardWithIceboxHtml.match(
+    new RegExp(`<article[^>]*data-project-id="${projectId}"[^>]*>[\\s\\S]*?<\\/article>`),
+  )?.[0];
+  assert.match(projectWithIcebox ?? "", /data-feature-progress="0.5"/);
+
+  roadmapPage = await fetch(new URL(projectLocation, baseUrl), {
+    headers: { cookie: sessionCookie },
+  });
+  roadmapHtml = await roadmapPage.text();
+  assert.match(roadmapHtml, /Ship the revised Feature roadmap/);
+  assert.match(roadmapHtml, /Uncommitted Icebox Feature/);
+  const iceboxFeatureId = roadmapHtml.match(
+    /<article[^>]*data-feature-id="([^"]+)"[^>]*>(?:(?!<\/article>)[\s\S])*?Uncommitted Icebox Feature/,
+  )?.[1];
+  assert.ok(iceboxFeatureId);
+  const roadmapSection = roadmapHtml.match(
+    /<section[^>]*aria-labelledby="roadmap-heading"[^>]*>[\s\S]*?<\/section>/,
+  )?.[0];
+  assert.doesNotMatch(roadmapSection ?? "", /\b(column|task|card)\b/i);
+
+  await writeProject({
+    action: "delete-feature",
+    featureId: iceboxFeatureId,
+  });
+  roadmapPage = await fetch(new URL(projectLocation, baseUrl), {
+    headers: { cookie: sessionCookie },
+  });
+  assert.doesNotMatch(await roadmapPage.text(), /Uncommitted Icebox Feature/);
+
+  await writeProject({
     action: "create-journal-entry",
     markdown:
       "Built **the parser**.\n\n```js\nconst safe = true;\n```\n\n[Reference](https://example.com)\n\n[Unsafe](javascript:alert('unsafe'))\n\n<script>alert('unsafe')</script>",
@@ -171,12 +297,12 @@ test("visitor can manage Ideas and a Project story", async () => {
   });
   assert.equal(missingRationale.status, 400);
 
-  await writeProjectStory({
+  await writeProject({
     action: "create-decision",
     decided: "Keep Journal Entries in Markdown",
     rationale: "Portable text keeps the record durable.",
   });
-  await writeProjectStory({
+  await writeProject({
     action: "create-journal-entry",
     markdown: "Newest Journal Entry",
   });
@@ -199,12 +325,12 @@ test("visitor can manage Ideas and a Project story", async () => {
   );
   assert.equal(journalEntryIds.length, 2);
 
-  await writeProjectStory({
+  await writeProject({
     action: "edit-journal-entry",
     entryId: journalEntryIds[1],
     markdown: "Revised with ~~obsolete wording~~ clearer context.",
   });
-  await writeProjectStory({
+  await writeProject({
     action: "delete-journal-entry",
     entryId: journalEntryIds[0],
   });
@@ -216,19 +342,19 @@ test("visitor can manage Ideas and a Project story", async () => {
   assert.match(revisedStoryHtml, /Revised with/);
   assert.doesNotMatch(revisedStoryHtml, /Newest Journal Entry/);
 
-  await writeProjectStory({
+  await writeProject({
     action: "update-objective",
     objective: "Ship the first usable cockpit",
   });
-  await writeProjectStory({
+  await writeProject({
     action: "update-next-action",
     nextAction: "Fix the CI",
   });
-  await writeProjectStory({
+  await writeProject({
     action: "update-objective",
     objective: "Prove the daily project workflow",
   });
-  await writeProjectStory({
+  await writeProject({
     action: "update-next-action",
     nextAction: "Deploy the cockpit",
   });

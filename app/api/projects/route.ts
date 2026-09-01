@@ -3,11 +3,15 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   changeLifecycleState,
   createDecision,
+  createFeature,
   createJournalEntry,
   createProject,
+  deleteFeature,
   deleteJournalEntry,
+  editFeature,
   editJournalEntry,
   ProjectInputError,
+  rankFeature,
   updateNextAction,
   updateObjective,
 } from "@/lib/projects";
@@ -63,6 +67,30 @@ export async function POST(request: NextRequest) {
       case "update-next-action": {
         const projectId = field(form, "id");
         await updateNextAction(projectId, field(form, "nextAction"));
+        return redirectToProject(projectId);
+      }
+      case "create-feature": {
+        const projectId = field(form, "id");
+        await createFeature(projectId, field(form, "title"), field(form, "lane"), form.get("done") === "on");
+        return redirectToProject(projectId);
+      }
+      case "edit-feature": {
+        const projectId = field(form, "id");
+        await editFeature(projectId, field(form, "featureId"), {
+          title: field(form, "title"),
+          lane: field(form, "lane"),
+          done: form.get("done") === "on",
+        });
+        return redirectToProject(projectId);
+      }
+      case "delete-feature": {
+        const projectId = field(form, "id");
+        await deleteFeature(projectId, field(form, "featureId"));
+        return redirectToProject(projectId);
+      }
+      case "rank-feature": {
+        const projectId = field(form, "id");
+        await rankFeature(projectId, field(form, "featureId"), field(form, "direction"));
         return redirectToProject(projectId);
       }
       default:

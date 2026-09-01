@@ -50,6 +50,13 @@
       "when": 1788226597698,
       "tag": "0006_mysterious_menace",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788227533565,
+      "tag": "0007_material_the_spike",
+      "breakpoints": true
     }
   ]
 }

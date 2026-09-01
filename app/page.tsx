@@ -337,7 +337,7 @@ function ProjectGroup({ title, projects }: { title: string; projects: Project[] 
       </p>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         {projects.map((project) => (
-          <article key={project.id} className="rounded-md border border-border p-4">
+          <article key={project.id} data-project-id={project.id} className="rounded-md border border-border p-4">
             <div className="flex items-start justify-between gap-3">
               <Link href={`/projects/${project.id}`} className="font-semibold tracking-tight underline-offset-4 hover:underline">
                 {project.name}
@@ -365,11 +365,18 @@ function ProjectGroup({ title, projects }: { title: string; projects: Project[] 
                 {project.objective}
               </p>
             ) : null}
+            <p
+              data-feature-progress={project.featureProgress}
+              className="mt-3 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground"
+            >
+              Feature Progress {Math.round(project.featureProgress * 100)}%
+            </p>
             <p className="mt-4 truncate font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
               {project.stack || "Stack not set"}
             </p>
             <time
               dateTime={project.lastActivityAt.toISOString()}
+              data-last-activity={project.lastActivityAt.toISOString()}
               className="mt-2 block font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground"
             >
               Last activity {formatDate(project.lastActivityAt)}
