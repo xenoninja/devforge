@@ -3,8 +3,24 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 
+import {
+  changeLifecycleStateAction,
+  createDecisionAction,
+  createFeatureAction,
+  createJournalEntryAction,
+  deleteFeatureAction,
+  deleteJournalEntryAction,
+  editFeatureAction,
+  editJournalEntryAction,
+  rankFeatureAction,
+  updateNextActionAction,
+  updateObjectiveAction,
+  updateProjectMetadataAction,
+} from "@/app/actions";
+import { LanePicker } from "@/components/lane-picker";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
+import { formatShortDate } from "@/lib/date";
 import {
   featureLanes,
   getProject,
@@ -51,11 +67,60 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       <div className="grid gap-10 py-10 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-14">
         <section>
           <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border pb-6">
-            <div className="max-w-2xl">
+            <form action={updateProjectMetadataAction} className="max-w-2xl flex-1 space-y-3">
+              <input type="hidden" name="id" value={project.id} />
               <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Project</p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight">{project.name}</h1>
-              <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{project.description}</p>
-            </div>
+              <label className="block">
+                <span className="sr-only">Project name</span>
+                <input
+                  required
+                  name="name"
+                  defaultValue={project.name}
+                  className="mt-2 h-11 w-full rounded-md border border-input bg-background px-3 text-2xl font-semibold tracking-tight outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </label>
+              <label className="block">
+                <span className="sr-only">Project description</span>
+                <textarea
+                  required
+                  name="description"
+                  rows={3}
+                  defaultValue={project.description}
+                  className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm leading-6 text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block">
+                  <span className="text-xs font-medium">Repository URL</span>
+                  <input
+                    type="url"
+                    name="repositoryUrl"
+                    defaultValue={project.repositoryUrl}
+                    className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-medium">Deployed URL</span>
+                  <input
+                    type="url"
+                    name="deployedUrl"
+                    defaultValue={project.deployedUrl ?? ""}
+                    className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                </label>
+              </div>
+              <label className="block">
+                <span className="text-xs font-medium">Stack</span>
+                <input
+                  name="stack"
+                  defaultValue={project.stack}
+                  className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </label>
+              <Button type="submit" variant="outline">
+                Save Project
+              </Button>
+            </form>
             <span className="rounded-sm border border-border px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.16em]">
               {lifecycleStateLabel(project.lifecycleState)}
             </span>
@@ -65,8 +130,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             aria-label="Project intent"
             data-resume-section="intent"
           >
-            <form action="/api/projects" method="post">
-              <input type="hidden" name="action" value="update-objective" />
+            <form action={updateObjectiveAction}>
               <input type="hidden" name="id" value={project.id} />
               <label className="block">
                 <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
@@ -76,7 +140,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                   name="objective"
                   required
                   rows={4}
-                  defaultValue={project.objective ?? ""}
+                  defaultValue={project.objective}
                   placeholder="What is this Project driving toward?"
                   className="mt-2 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm leading-6 outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
                 />
@@ -85,12 +149,11 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                 Replacing the Objective archives its prior value in the Journal.
               </p>
               <Button type="submit" variant="outline" className="mt-3">
-                {project.objective ? "Replace Objective" : "Set Objective"}
+                Replace Objective
               </Button>
             </form>
 
-            <form action="/api/projects" method="post">
-              <input type="hidden" name="action" value="update-next-action" />
+            <form action={updateNextActionAction}>
               <input type="hidden" name="id" value={project.id} />
               <label className="block">
                 <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
@@ -100,7 +163,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                   name="nextAction"
                   required
                   rows={4}
-                  defaultValue={project.nextAction ?? ""}
+                  defaultValue={project.nextAction}
                   placeholder="What is the next concrete step?"
                   className="mt-2 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm leading-6 outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
                 />
@@ -109,7 +172,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                 Free-standing from the roadmap. Replacing it archives the prior value.
               </p>
               <Button type="submit" variant="outline" className="mt-3">
-                {project.nextAction ? "Replace Next Action" : "Set Next Action"}
+                Replace Next Action
               </Button>
             </form>
           </section>
@@ -170,14 +233,13 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                           Journal Entry
                         </strong>
                         <time className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                          {formatDate(item.createdAt)}
+                          {formatShortDate(item.createdAt)}
                         </time>
                       </div>
                       <Markdown>{item.markdown}</Markdown>
                       <details className="mt-5 border-t border-dashed border-border pt-4">
                         <summary className="cursor-pointer text-xs font-medium">Edit Journal Entry</summary>
-                        <form action="/api/projects" method="post" className="mt-4 space-y-3">
-                          <input type="hidden" name="action" value="edit-journal-entry" />
+                        <form action={editJournalEntryAction} className="mt-4 space-y-3">
                           <input type="hidden" name="id" value={project.id} />
                           <input type="hidden" name="entryId" value={item.id} />
                           <textarea
@@ -190,8 +252,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                           <Button type="submit" variant="outline">Save Journal Entry</Button>
                         </form>
                       </details>
-                      <form action="/api/projects" method="post" className="mt-3">
-                        <input type="hidden" name="action" value="delete-journal-entry" />
+                      <form action={deleteJournalEntryAction} className="mt-3">
                         <input type="hidden" name="id" value={project.id} />
                         <input type="hidden" name="entryId" value={item.id} />
                         <Button type="submit" variant="ghost" className="px-0 text-muted-foreground hover:text-foreground">
@@ -211,7 +272,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                       <div className="flex items-center justify-between gap-4">
                         <strong className="font-mono text-[10px] uppercase tracking-[0.18em]">Decision</strong>
                         <time className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                          {formatDate(item.createdAt)}
+                          {formatShortDate(item.createdAt)}
                         </time>
                       </div>
                       <h3 className="mt-4 text-base font-semibold">{item.decided}</h3>
@@ -240,8 +301,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
               </p>
             </div>
 
-            <form action="/api/projects" method="post" className="mt-5 grid gap-3 border-y border-border py-4 sm:grid-cols-[minmax(0,1fr)_9rem_auto_auto] sm:items-end">
-              <input type="hidden" name="action" value="create-feature" />
+            <form action={createFeatureAction} className="mt-5 grid gap-3 border-y border-border py-4 sm:grid-cols-[minmax(0,1fr)_9rem_auto_auto] sm:items-end">
               <input type="hidden" name="id" value={project.id} />
               <label>
                 <span className="text-xs font-medium">Feature title</span>
@@ -365,7 +425,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                   <strong className="text-sm font-medium">{lifecycleStateLabel(change.lifecycleState)}</strong>
                   <p className="text-sm leading-6 text-muted-foreground">{change.note || "No note"}</p>
                   <time className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                    {formatDate(change.createdAt)}
+                    {formatShortDate(change.createdAt)}
                   </time>
                 </article>
               ))}
@@ -381,8 +441,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
                 Markdown is supported, including links and fenced code.
               </p>
-              <form action="/api/projects" method="post" className="mt-5 space-y-4">
-                <input type="hidden" name="action" value="create-journal-entry" />
+              <form action={createJournalEntryAction} className="mt-5 space-y-4">
                 <input type="hidden" name="id" value={project.id} />
                 <label className="block">
                   <span className="text-xs font-medium">Entry</span>
@@ -401,8 +460,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             <section className="rounded-md border border-border p-5">
               <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Record</p>
               <h2 className="mt-2 text-lg font-semibold tracking-tight">New Decision</h2>
-              <form action="/api/projects" method="post" className="mt-5 space-y-4">
-                <input type="hidden" name="action" value="create-decision" />
+              <form action={createDecisionAction} className="mt-5 space-y-4">
                 <input type="hidden" name="id" value={project.id} />
                 <label className="block">
                   <span className="text-xs font-medium">What was decided</span>
@@ -433,8 +491,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
                 Move freely between states. Add context when the declaration needs it.
               </p>
-              <form action="/api/projects" method="post" className="mt-5 space-y-4">
-                <input type="hidden" name="action" value="change-lifecycle-state" />
+              <form action={changeLifecycleStateAction} className="mt-5 space-y-4">
                 <input type="hidden" name="id" value={project.id} />
                 <label className="block">
                   <span className="text-xs font-medium">Lifecycle State</span>
@@ -498,43 +555,13 @@ function FeatureList({ features, projectId }: { features: Feature[]; projectId: 
             >
               {feature.title}
             </h4>
-            <form action="/api/projects" method="post">
-              <input type="hidden" name="action" value="rank-feature" />
-              <input type="hidden" name="id" value={projectId} />
-              <input type="hidden" name="featureId" value={feature.id} />
-              <input type="hidden" name="direction" value="up" />
-              <Button
-                type="submit"
-                variant="ghost"
-                className="size-8 p-0"
-                aria-label={`Rank ${feature.title} earlier`}
-              >
-                <ArrowUp aria-hidden="true" className="size-3.5" />
-              </Button>
-            </form>
-            <form action="/api/projects" method="post">
-              <input type="hidden" name="action" value="rank-feature" />
-              <input type="hidden" name="id" value={projectId} />
-              <input type="hidden" name="featureId" value={feature.id} />
-              <input type="hidden" name="direction" value="down" />
-              <Button
-                type="submit"
-                variant="ghost"
-                className="size-8 p-0"
-                aria-label={`Rank ${feature.title} later`}
-              >
-                <ArrowDown aria-hidden="true" className="size-3.5" />
-              </Button>
-            </form>
+            <LanePicker feature={feature} lanes={featureLanes} projectId={projectId} />
+            <FeatureRankButton direction="up" feature={feature} projectId={projectId} />
+            <FeatureRankButton direction="down" feature={feature} projectId={projectId} />
           </div>
           <details className="mt-3 border-t border-dashed border-border pt-3">
             <summary className="cursor-pointer text-xs font-medium">Edit Feature</summary>
-            <form
-              action="/api/projects"
-              method="post"
-              className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_9rem_auto_auto] sm:items-end"
-            >
-              <input type="hidden" name="action" value="edit-feature" />
+            <form action={editFeatureAction} className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
               <input type="hidden" name="id" value={projectId} />
               <input type="hidden" name="featureId" value={feature.id} />
               <label>
@@ -546,20 +573,6 @@ function FeatureList({ features, projectId }: { features: Feature[]; projectId: 
                   className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
               </label>
-              <label>
-                <span className="text-xs font-medium">Lane</span>
-                <select
-                  name="lane"
-                  defaultValue={feature.lane}
-                  className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  {featureLanes.map((candidate) => (
-                    <option key={candidate.value} value={candidate.value}>
-                      {candidate.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
               <label className="flex h-9 items-center gap-2 text-xs font-medium">
                 <input type="checkbox" name="done" defaultChecked={feature.done} className="size-4 accent-foreground" />
                 Done
@@ -567,8 +580,7 @@ function FeatureList({ features, projectId }: { features: Feature[]; projectId: 
               <Button type="submit" variant="outline">Save Feature</Button>
             </form>
           </details>
-          <form action="/api/projects" method="post" className="mt-2">
-            <input type="hidden" name="action" value="delete-feature" />
+          <form action={deleteFeatureAction} className="mt-2">
             <input type="hidden" name="id" value={projectId} />
             <input type="hidden" name="featureId" value={feature.id} />
             <Button type="submit" variant="ghost" className="px-0 text-muted-foreground hover:text-foreground">
@@ -579,6 +591,33 @@ function FeatureList({ features, projectId }: { features: Feature[]; projectId: 
         </article>
       ))}
     </div>
+  );
+}
+
+function FeatureRankButton({
+  direction,
+  feature,
+  projectId,
+}: {
+  direction: "up" | "down";
+  feature: Feature;
+  projectId: string;
+}) {
+  const Icon = direction === "up" ? ArrowUp : ArrowDown;
+  return (
+    <form action={rankFeatureAction}>
+      <input type="hidden" name="id" value={projectId} />
+      <input type="hidden" name="featureId" value={feature.id} />
+      <input type="hidden" name="direction" value={direction} />
+      <Button
+        type="submit"
+        variant="ghost"
+        className="size-8 p-0"
+        aria-label={`Rank ${feature.title} ${direction === "up" ? "earlier" : "later"}`}
+      >
+        <Icon aria-hidden="true" className="size-3.5" />
+      </Button>
+    </form>
   );
 }
 
@@ -612,12 +651,4 @@ function Markdown({ children }: { children: string }) {
       </ReactMarkdown>
     </div>
   );
-}
-
-function formatDate(date: Date) {
-  return new Intl.DateTimeFormat("en", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(date);
 }

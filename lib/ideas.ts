@@ -1,4 +1,4 @@
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 
 import { getDatabase } from "@/lib/db";
 import { ideas } from "@/lib/db/schema";
@@ -40,6 +40,16 @@ export async function discardIdea(id: string) {
     .update(ideas)
     .set({ state: "discarded", updatedAt: new Date() })
     .where(eq(ideas.id, requireIdeaId(id)));
+}
+
+export async function restoreIdea(id: string) {
+  const [restored] = await getDatabase()
+    .update(ideas)
+    .set({ state: "inbox", updatedAt: new Date() })
+    .where(and(eq(ideas.id, requireIdeaId(id)), eq(ideas.state, "discarded")))
+    .returning({ id: ideas.id });
+
+  if (!restored) throw new IdeaInputError("Discarded Idea not found");
 }
 
 function requireTitle(title: string) {

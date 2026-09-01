@@ -17,7 +17,7 @@ import {
   lifecycleStateChanges,
   projects as projectsTable,
 } from "@/lib/db/schema";
-import { interleaveStoryItems } from "@/lib/story";
+import { interleaveJournalEntriesAndDecisions } from "@/lib/story";
 
 export const lifecycleStates = [
   { value: "exploring", label: "Exploring" },
@@ -40,6 +40,11 @@ export type Feature = typeof features.$inferSelect;
 export type Project = StoredProject & { momentum: Momentum | null; featureProgress: number };
 
 export class ProjectInputError extends Error {}
+
+const projectIntentFields = {
+  objective: { label: "Objective", source: "objective" as const },
+  nextAction: { label: "Next Action", source: "next_action" as const },
+} as const;
 
 const lifecycleStateActivitySource: ActivitySource = "lifecycle_state";
 const journalEntryActivitySource: ActivitySource = "journal_entry";
@@ -125,7 +130,7 @@ export async function listProjectStory(id: string): Promise<ProjectStoryItem[]> 
     database.select().from(decisions).where(eq(decisions.projectId, projectId)),
   ]);
 
-  return interleaveStoryItems(entries, projectDecisions);
+  return interleaveJournalEntriesAndDecisions(entries, projectDecisions);
 }
 
 export async function createJournalEntry(projectId: string, markdown: string) {
@@ -226,12 +231,11 @@ export async function createFeature(projectId: string, title: string, lane: stri
 export async function editFeature(
   projectId: string,
   featureId: string,
-  input: { title: string; lane: string; done: boolean },
+  input: { title: string; done: boolean },
 ) {
   const id = requireId(projectId, "Project");
   const idOfFeature = requireId(featureId, "Feature");
   const title = requireText(input.title, "A Feature title is required");
-  const lane = requireFeatureLane(input.lane);
 
   await getDatabase().transaction(async (transaction) => {
     await lockProject(transaction, id);
@@ -244,29 +248,48 @@ export async function editFeature(
 
     if (!feature) throw new ProjectInputError("Feature not found");
 
-    let rank = feature.rank;
-    if (lane !== feature.lane) {
-      const [lastFeature] = await transaction
-        .select({ rank: features.rank })
-        .from(features)
-        .where(and(eq(features.projectId, id), eq(features.lane, lane)))
-        .orderBy(desc(features.rank))
-        .limit(1);
-      rank = (lastFeature?.rank ?? 0) + 1;
-    }
-
-    const laneChanged = lane !== feature.lane;
     const doneChanged = input.done !== feature.done;
-    if (title === feature.title && !laneChanged && !doneChanged) return;
+    if (title === feature.title && !doneChanged) return;
 
     const now = new Date();
     await transaction
       .update(features)
-      .set({ title, lane, done: input.done, rank, updatedAt: now })
+      .set({ title, done: input.done, updatedAt: now })
       .where(eq(features.id, idOfFeature));
 
-    if (laneChanged) await recordActivity(transaction, id, featureLaneActivitySource, now);
     if (doneChanged) await recordActivity(transaction, id, featureDoneActivitySource, now);
+  });
+}
+
+export async function moveFeatureToLane(projectId: string, featureId: string, lane: string) {
+  const id = requireId(projectId, "Project");
+  const idOfFeature = requireId(featureId, "Feature");
+  const nextLane = requireFeatureLane(lane);
+
+  await getDatabase().transaction(async (transaction) => {
+    await lockProject(transaction, id);
+    const [feature] = await transaction
+      .select()
+      .from(features)
+      .where(and(eq(features.id, idOfFeature), eq(features.projectId, id)))
+      .limit(1)
+      .for("update");
+
+    if (!feature) throw new ProjectInputError("Feature not found");
+    if (feature.lane === nextLane) return;
+
+    const [lastFeature] = await transaction
+      .select({ rank: features.rank })
+      .from(features)
+      .where(and(eq(features.projectId, id), eq(features.lane, nextLane)))
+      .orderBy(desc(features.rank))
+      .limit(1);
+    const now = new Date();
+    await transaction
+      .update(features)
+      .set({ lane: nextLane, rank: (lastFeature?.rank ?? 0) + 1, updatedAt: now })
+      .where(eq(features.id, idOfFeature));
+    await recordActivity(transaction, id, featureLaneActivitySource, now);
   });
 }
 
@@ -327,6 +350,8 @@ export async function createProject(input: {
   stack: string;
   lifecycleState: string;
   note: string;
+  objective: string;
+  nextAction: string;
 }) {
   const project = {
     name: requireText(input.name, "A Project name is required"),
@@ -338,14 +363,49 @@ export async function createProject(input: {
     stack: requireText(input.stack, "A stack line is required"),
     lifecycleState: requireLifecycleState(input.lifecycleState),
     note: input.note.trim(),
+    objective: requireText(input.objective, "An Objective is required"),
+    nextAction: requireText(input.nextAction, "A Next Action is required"),
   };
 
   return getDatabase().transaction((transaction) => insertProject(transaction, project));
 }
 
-export async function promoteIdea(id: string, lifecycleState: string) {
+export async function updateProjectMetadata(
+  id: string,
+  input: {
+    name: string;
+    description: string;
+    repositoryUrl: string;
+    deployedUrl: string;
+    stack: string;
+  },
+) {
+  const projectId = requireId(id, "Project");
+  const [updated] = await getDatabase()
+    .update(projectsTable)
+    .set({
+      name: requireText(input.name, "A Project name is required"),
+      description: requireText(input.description, "A Project description is required"),
+      repositoryUrl: input.repositoryUrl.trim()
+        ? requireWebUrl(input.repositoryUrl, "A valid repository URL is required")
+        : "",
+      deployedUrl: input.deployedUrl.trim()
+        ? requireWebUrl(input.deployedUrl, "A valid deployed URL is required")
+        : null,
+      stack: input.stack.trim(),
+      updatedAt: new Date(),
+    })
+    .where(eq(projectsTable.id, projectId))
+    .returning({ id: projectsTable.id });
+
+  if (!updated) throw new ProjectInputError("Project not found");
+}
+
+export async function promoteIdea(id: string, lifecycleState: string, objective: string, nextAction: string) {
   const ideaId = requireId(id, "Idea");
   const selectedState = requireLifecycleState(lifecycleState);
+  const nextObjective = requireText(objective, "An Objective is required");
+  const next = requireText(nextAction, "A Next Action is required");
 
   return getDatabase().transaction(async (transaction) => {
     const [idea] = await transaction
@@ -365,6 +425,8 @@ export async function promoteIdea(id: string, lifecycleState: string) {
       lifecycleState: selectedState,
       note: "Promoted from Idea",
       originIdeaId: idea.id,
+      objective: nextObjective,
+      nextAction: next,
     });
   });
 }
@@ -372,21 +434,29 @@ export async function promoteIdea(id: string, lifecycleState: string) {
 export async function changeLifecycleState(id: string, lifecycleState: string, note: string) {
   const projectId = requireId(id, "Project");
   const nextState = requireLifecycleState(lifecycleState);
-  const database = getDatabase();
-  const now = new Date();
-  await database.transaction(async (transaction) => {
+  const trimmedNote = note.trim();
+
+  await getDatabase().transaction(async (transaction) => {
     const [project] = await transaction
-      .update(projectsTable)
-      .set({ lifecycleState: nextState, lastActivityAt: now, updatedAt: now })
+      .select({ id: projectsTable.id, lifecycleState: projectsTable.lifecycleState })
+      .from(projectsTable)
       .where(eq(projectsTable.id, projectId))
-      .returning({ id: projectsTable.id });
+      .limit(1)
+      .for("update");
 
     if (!project) throw new ProjectInputError("Project not found");
+    if (project.lifecycleState === nextState) return;
+
+    const now = new Date();
+    await transaction
+      .update(projectsTable)
+      .set({ lifecycleState: nextState, lastActivityAt: now, updatedAt: now })
+      .where(eq(projectsTable.id, projectId));
 
     await transaction.insert(lifecycleStateChanges).values({
       projectId,
       lifecycleState: nextState,
-      note: note.trim(),
+      note: trimmedNote,
     });
 
     await transaction.insert(activities).values({
@@ -414,13 +484,12 @@ async function lockProject(transaction: ProjectTransaction, projectId: string) {
   if (!project) throw new ProjectInputError("Project not found");
 }
 
-type ProjectIntentField = "objective" | "nextAction";
+type ProjectIntentField = keyof typeof projectIntentFields;
 
 async function updateProjectIntent(projectId: string, field: ProjectIntentField, value: string) {
   const id = requireId(projectId, "Project");
-  const label = field === "objective" ? "Objective" : "Next Action";
+  const { label, source } = projectIntentFields[field];
   const content = requireText(value, `A ${label} is required`);
-  const source: ActivitySource = field === "objective" ? "objective" : "next_action";
 
   await getDatabase().transaction(async (transaction) => {
     const [project] = await transaction
@@ -435,20 +504,16 @@ async function updateProjectIntent(projectId: string, field: ProjectIntentField,
     const previous = project[field];
     if (previous === content) return;
     const now = new Date();
-    if (previous) {
-      await transaction.insert(journalEntries).values({
-        projectId: id,
-        markdown: `**Previous ${label}**\n\n${previous}`,
-        createdAt: now,
-        updatedAt: now,
-      });
-    }
+    await transaction.insert(journalEntries).values({
+      projectId: id,
+      markdown: `**Previous ${label}**\n\n${previous}`,
+      createdAt: now,
+      updatedAt: now,
+    });
 
-    const intentUpdate =
-      field === "objective" ? { objective: content } : { nextAction: content };
     await transaction
       .update(projectsTable)
-      .set({ ...intentUpdate, lastActivityAt: now, updatedAt: now })
+      .set({ [field]: content, lastActivityAt: now, updatedAt: now })
       .where(eq(projectsTable.id, id));
     await transaction.insert(activities).values({ projectId: id, source, createdAt: now });
   });
@@ -480,6 +545,8 @@ async function insertProject(
     stack: string;
     lifecycleState: LifecycleState;
     note: string;
+    objective: string;
+    nextAction: string;
     originIdeaId?: string;
   },
 ) {
@@ -493,6 +560,8 @@ async function insertProject(
       deployedUrl: project.deployedUrl,
       stack: project.stack,
       lifecycleState: project.lifecycleState,
+      objective: project.objective,
+      nextAction: project.nextAction,
       originIdeaId: project.originIdeaId,
       lastActivityAt: now,
     })

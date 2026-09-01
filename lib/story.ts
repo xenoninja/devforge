@@ -1,6 +1,9 @@
-type DatedStoryItem = { id: string; createdAt: Date };
+type DatedJournalOrDecision = { id: string; createdAt: Date };
 
-export function interleaveStoryItems<JournalEntry extends DatedStoryItem, Decision extends DatedStoryItem>(
+export function interleaveJournalEntriesAndDecisions<
+  JournalEntry extends DatedJournalOrDecision,
+  Decision extends DatedJournalOrDecision,
+>(
   entries: JournalEntry[],
   decisions: Decision[],
 ): Array<(JournalEntry & { type: "journal-entry" }) | (Decision & { type: "decision" })> {

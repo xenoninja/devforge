@@ -2,9 +2,18 @@ import { Archive, ExternalLink, FolderGit2, Inbox, Lightbulb, Plus, Save, Search
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import {
+  captureIdeaAction,
+  createProjectAction,
+  discardIdeaAction,
+  editIdeaAction,
+  promoteIdeaAction,
+  restoreIdeaAction,
+} from "@/app/actions";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { listTimeline, searchDashboard, type SearchResults, type TimelineItem } from "@/lib/dashboard";
+import { formatShortDate } from "@/lib/date";
 import { listIdeas, type IdeaView } from "@/lib/ideas";
 import { lifecycleStateLabel, lifecycleStates, listProjects, type Project } from "@/lib/projects";
 import { cn } from "@/lib/utils";
@@ -80,8 +89,7 @@ export default async function DashboardPage({
                 Rough is enough. Capture it now; shape it when it earns attention.
               </p>
 
-              <form action="/api/ideas" method="post" className="mt-6 space-y-3">
-                <input type="hidden" name="action" value="capture" />
+              <form action={captureIdeaAction} className="mt-6 space-y-3">
                 <label className="block">
                   <span className="sr-only">Idea title</span>
                   <input
@@ -109,8 +117,7 @@ export default async function DashboardPage({
             <div className="order-2 pt-8 lg:order-1 lg:pt-0">
             <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">New Project</p>
             <h1 className="mt-2 text-xl font-semibold tracking-tight">Start tracking the work.</h1>
-            <form action="/api/projects" method="post" className="mt-5 space-y-3">
-              <input type="hidden" name="action" value="create" />
+            <form action={createProjectAction} className="mt-5 space-y-3">
               <label className="block">
                 <span className="sr-only">Project name</span>
                 <input
@@ -156,6 +163,26 @@ export default async function DashboardPage({
                   name="stack"
                   placeholder="Stack · Next.js, Postgres"
                   className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </label>
+              <label className="block">
+                <span className="sr-only">Objective</span>
+                <textarea
+                  required
+                  name="objective"
+                  rows={2}
+                  placeholder="Objective"
+                  className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm leading-6 outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </label>
+              <label className="block">
+                <span className="sr-only">Next Action</span>
+                <textarea
+                  required
+                  name="nextAction"
+                  rows={2}
+                  placeholder="Next Action"
+                  className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm leading-6 outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
                 />
               </label>
               <label className="block">
@@ -236,7 +263,7 @@ export default async function DashboardPage({
                           <span className="flex shrink-0 items-center gap-4 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
                             <span className="hidden sm:inline">{project.stack}</span>
                             <time dateTime={project.lastActivityAt.toISOString()}>
-                              Last activity {formatDate(project.lastActivityAt)}
+                              Last activity {formatShortDate(project.lastActivityAt)}
                             </time>
                           </span>
                         </Link>
@@ -293,7 +320,7 @@ export default async function DashboardPage({
             {ideas.map((idea) => (
               <article id={`idea-${idea.id}`} key={idea.id} data-idea-id={idea.id} className="scroll-mt-6 py-6">
                 {view === "inbox" ? (
-                  <form action="/api/ideas" method="post">
+                  <form action={editIdeaAction}>
                     <input type="hidden" name="id" value={idea.id} />
                     <div className="grid gap-3">
                       <input
@@ -311,12 +338,30 @@ export default async function DashboardPage({
                         rows={Math.max(2, idea.notes.split("\n").length)}
                         className="w-full resize-y rounded-sm bg-transparent text-sm leading-6 text-muted-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
                       />
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <label>
+                          <span className="sr-only">Objective</span>
+                          <input
+                            name="objective"
+                            placeholder="Objective"
+                            className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                          />
+                        </label>
+                        <label>
+                          <span className="sr-only">Next Action</span>
+                          <input
+                            name="nextAction"
+                            placeholder="Next Action"
+                            className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                          />
+                        </label>
+                      </div>
                       <div className="flex items-center justify-between gap-3">
                         <time
                           dateTime={idea.createdAt.toISOString()}
                           className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground"
                         >
-                          Captured {formatDate(idea.createdAt)}
+                          Captured {formatShortDate(idea.createdAt)}
                         </time>
                         <div className="flex flex-wrap justify-end gap-2">
                           <label>
@@ -333,15 +378,15 @@ export default async function DashboardPage({
                               ))}
                             </select>
                           </label>
-                          <Button type="submit" name="action" value="promote" className="h-8 px-3 text-xs">
+                          <Button formAction={promoteIdeaAction} className="h-8 px-3 text-xs">
                             <FolderGit2 aria-hidden="true" className="size-3.5" />
                             Promote
                           </Button>
-                          <Button type="submit" name="action" value="edit" variant="outline" className="h-8 px-3 text-xs">
+                          <Button type="submit" variant="outline" className="h-8 px-3 text-xs">
                             <Save aria-hidden="true" className="size-3.5" />
                             Save
                           </Button>
-                          <Button type="submit" name="action" value="discard" variant="ghost" className="h-8 px-3 text-xs text-destructive">
+                          <Button formAction={discardIdeaAction} variant="ghost" className="h-8 px-3 text-xs text-destructive">
                             <Trash2 aria-hidden="true" className="size-3.5" />
                             Discard
                           </Button>
@@ -358,6 +403,14 @@ export default async function DashboardPage({
                       </span>
                     </div>
                     {idea.notes ? <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{idea.notes}</p> : null}
+                    {idea.state === "discarded" ? (
+                      <form action={restoreIdeaAction} className="mt-3">
+                        <input type="hidden" name="id" value={idea.id} />
+                        <Button type="submit" variant="outline" className="h-8 px-3 text-xs">
+                          Restore
+                        </Button>
+                      </form>
+                    ) : null}
                   </div>
                 )}
               </article>
@@ -512,7 +565,7 @@ function TimelinePanel({ timeline }: { timeline: TimelineItem[] }) {
                 dateTime={item.createdAt.toISOString()}
                 className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground"
               >
-                {formatDate(item.createdAt)}
+                {formatShortDate(item.createdAt)}
               </time>
             </Link>
           ))}
@@ -561,14 +614,12 @@ function ProjectGroup({ title, projects }: { title: string; projects: Project[] 
               </div>
             </div>
             <p className="mt-3 line-clamp-2 text-sm leading-6 text-muted-foreground">{project.description}</p>
-            {project.objective ? (
-              <p className="mt-3 line-clamp-3 text-sm leading-6">
-                <span className="mr-2 font-mono text-[9px] uppercase tracking-[0.16em] text-muted-foreground">
-                  Objective
-                </span>
-                {project.objective}
-              </p>
-            ) : null}
+            <p className="mt-3 line-clamp-3 text-sm leading-6">
+              <span className="mr-2 font-mono text-[9px] uppercase tracking-[0.16em] text-muted-foreground">
+                Objective
+              </span>
+              {project.objective}
+            </p>
             <p
               data-feature-progress={project.featureProgress}
               className="mt-3 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground"
@@ -583,7 +634,7 @@ function ProjectGroup({ title, projects }: { title: string; projects: Project[] 
               data-last-activity={project.lastActivityAt.toISOString()}
               className="mt-2 block font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground"
             >
-              Last activity {formatDate(project.lastActivityAt)}
+              Last activity {formatShortDate(project.lastActivityAt)}
             </time>
             {project.repositoryUrl || project.deployedUrl ? (
               <div className="mt-3 flex flex-wrap gap-4">
@@ -634,12 +685,4 @@ function EmptyIdeas({ view }: { view: IdeaView }) {
       </div>
     </div>
   );
-}
-
-function formatDate(date: Date) {
-  return new Intl.DateTimeFormat("en", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(date);
 }

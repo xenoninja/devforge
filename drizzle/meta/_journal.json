@@ -57,6 +57,13 @@
       "when": 1788227533565,
       "tag": "0007_material_the_spike",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788300000000,
+      "tag": "0008_intent_required",
+      "breakpoints": true
     }
   ]
 }

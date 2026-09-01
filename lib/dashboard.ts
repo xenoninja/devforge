@@ -2,7 +2,7 @@ import { desc, eq, ilike, or } from "drizzle-orm";
 
 import { getDatabase } from "@/lib/db";
 import { decisions, ideas, journalEntries, projects } from "@/lib/db/schema";
-import { interleaveStoryItems } from "@/lib/story";
+import { interleaveJournalEntriesAndDecisions } from "@/lib/story";
 
 export type TimelineItem =
   | {
@@ -69,7 +69,7 @@ export async function listTimeline(): Promise<TimelineItem[]> {
       .orderBy(desc(decisions.createdAt), desc(decisions.id)),
   ]);
 
-  return interleaveStoryItems(entries, projectDecisions);
+  return interleaveJournalEntriesAndDecisions(entries, projectDecisions);
 }
 
 export async function searchDashboard(query: string): Promise<SearchResults> {
