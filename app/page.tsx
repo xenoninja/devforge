@@ -72,7 +72,41 @@ export default async function DashboardPage({
 
       <div className="grid gap-10 py-10 lg:grid-cols-[18rem_minmax(0,1fr)] lg:gap-14">
         <aside>
-          <div className="lg:sticky lg:top-10">
+          <div className="flex flex-col lg:sticky lg:top-10">
+            <div className="order-1 border-b border-border pb-8 lg:order-2 lg:mt-10 lg:border-b-0 lg:border-t lg:pb-0 lg:pt-8">
+              <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Quick capture</p>
+              <h1 className="mt-2 text-xl font-semibold tracking-tight">Catch the thought.</h1>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                Rough is enough. Capture it now; shape it when it earns attention.
+              </p>
+
+              <form action="/api/ideas" method="post" className="mt-6 space-y-3">
+                <input type="hidden" name="action" value="capture" />
+                <label className="block">
+                  <span className="sr-only">Idea title</span>
+                  <input
+                    required
+                    name="title"
+                    placeholder="Idea title"
+                    className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                </label>
+                <label className="block">
+                  <span className="sr-only">Idea notes</span>
+                  <textarea
+                    name="notes"
+                    placeholder="A few lines of notes (optional)"
+                    rows={4}
+                    className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm leading-6 outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                </label>
+                <Button type="submit" className="h-11 w-full">
+                  <Plus aria-hidden="true" className="size-4" />
+                  Capture Idea
+                </Button>
+              </form>
+            </div>
+            <div className="order-2 pt-8 lg:order-1 lg:pt-0">
             <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">New Project</p>
             <h1 className="mt-2 text-xl font-semibold tracking-tight">Start tracking the work.</h1>
             <form action="/api/projects" method="post" className="mt-5 space-y-3">
@@ -80,7 +114,6 @@ export default async function DashboardPage({
               <label className="block">
                 <span className="sr-only">Project name</span>
                 <input
-                  autoFocus
                   required
                   name="name"
                   placeholder="Project name"
@@ -154,40 +187,8 @@ export default async function DashboardPage({
                 Create Project
               </Button>
             </form>
-
-            <div className="mt-10 border-t border-border pt-8">
-              <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Quick capture</p>
-              <h1 className="mt-2 text-xl font-semibold tracking-tight">Catch the thought.</h1>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                Rough is enough. Capture it now; shape it when it earns attention.
-              </p>
-
-              <form action="/api/ideas" method="post" className="mt-6 space-y-3">
-                <input type="hidden" name="action" value="capture" />
-                <label className="block">
-                  <span className="sr-only">Idea title</span>
-                  <input
-                    required
-                    name="title"
-                    placeholder="Idea title"
-                    className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                  />
-                </label>
-                <label className="block">
-                  <span className="sr-only">Idea notes</span>
-                  <textarea
-                    name="notes"
-                    placeholder="A few lines of notes (optional)"
-                    rows={4}
-                    className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm leading-6 outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                  />
-                </label>
-                <Button type="submit" className="w-full">
-                  <Plus aria-hidden="true" className="size-4" />
-                  Capture Idea
-                </Button>
-              </form>
             </div>
+
           </div>
         </aside>
 
@@ -203,12 +204,14 @@ export default async function DashboardPage({
             </div>
 
             {projects.length === 0 ? (
-              <div className="grid min-h-52 place-items-center border-b border-border py-12 text-center">
+              <div className="grid min-h-64 place-items-center border-b border-border py-14 text-center">
                 <div className="max-w-sm">
-                  <FolderGit2 aria-hidden="true" className="mx-auto size-5 text-muted-foreground" />
-                  <h3 className="mt-4 font-semibold tracking-tight">Create your first Project</h3>
+                  <span className="mx-auto grid size-11 place-items-center rounded-md border border-border bg-muted text-muted-foreground">
+                    <FolderGit2 aria-hidden="true" className="size-5" />
+                  </span>
+                  <h3 className="mt-5 text-lg font-semibold tracking-tight">Create your first Project</h3>
                   <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                    Add its metadata, then declare where the work stands.
+                    Set its Objective and Next Action, then choose the Features that belong in the Now Lane.
                   </p>
                 </div>
               </div>
@@ -515,9 +518,14 @@ function TimelinePanel({ timeline }: { timeline: TimelineItem[] }) {
           ))}
         </div>
       ) : (
-        <p className="border-b border-border py-6 text-sm text-muted-foreground">
-          No Journal Entries or Decisions yet.
-        </p>
+        <div className="grid min-h-52 place-items-center border-b border-border py-12 text-center">
+          <div className="max-w-sm">
+            <h3 className="font-semibold tracking-tight">Your Project story starts here</h3>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Journal Entries record what happened. Decisions preserve what you chose and why.
+            </p>
+          </div>
+        </div>
       )}
     </section>
   );
@@ -620,7 +628,7 @@ function EmptyIdeas({ view }: { view: IdeaView }) {
         </h3>
         <p className="mx-auto mt-3 text-pretty text-sm leading-6 text-muted-foreground">
           {view === "inbox"
-            ? "Give the thought a title, add any useful context, then press Capture Idea."
+            ? "Give the thought a title and a little context. Promote it when the thought becomes committed work."
             : "Discarded and promoted Ideas appear here, so a thought is never lost."}
         </p>
       </div>

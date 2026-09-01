@@ -36,6 +36,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   if (!result) notFound();
 
   const { project, changes, originIdea } = result;
+  const nowFeatures = roadmap.filter((feature) => feature.lane === "now");
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-6xl px-5 py-5 sm:px-8">
@@ -59,65 +60,11 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
               {lifecycleStateLabel(project.lifecycleState)}
             </span>
           </div>
-
-          {originIdea ? (
-            <div className="border-b border-border py-5">
-              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Origin Idea</p>
-              <Link
-                href={`/?view=archived#idea-${originIdea.id}`}
-                className="mt-2 inline-flex text-sm font-medium underline-offset-4 hover:underline"
-              >
-                {originIdea.title}
-              </Link>
-            </div>
-          ) : null}
-
-          <dl className="grid gap-6 border-b border-border py-7 sm:grid-cols-2">
-            <div>
-              <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Repository</dt>
-              <dd className="mt-2 text-sm">
-                {project.repositoryUrl ? (
-                  <a
-                    href={project.repositoryUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-2 font-medium underline-offset-4 hover:underline"
-                  >
-                    <GitBranch aria-hidden="true" className="size-4" />
-                    {project.repositoryUrl}
-                    <ExternalLink aria-hidden="true" className="size-3" />
-                  </a>
-                ) : (
-                  <span className="text-muted-foreground">Not set</span>
-                )}
-              </dd>
-            </div>
-            <div>
-              <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Deployed</dt>
-              <dd className="mt-2 text-sm">
-                {project.deployedUrl ? (
-                  <a
-                    href={project.deployedUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-2 font-medium underline-offset-4 hover:underline"
-                  >
-                    <Rocket aria-hidden="true" className="size-4" />
-                    {project.deployedUrl}
-                    <ExternalLink aria-hidden="true" className="size-3" />
-                  </a>
-                ) : (
-                  <span className="text-muted-foreground">Not deployed</span>
-                )}
-              </dd>
-            </div>
-            <div className="sm:col-span-2">
-              <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Stack</dt>
-              <dd className="mt-2 text-sm">{project.stack || <span className="text-muted-foreground">Not set</span>}</dd>
-            </div>
-          </dl>
-
-          <section className="grid gap-6 border-b border-border py-7 sm:grid-cols-2" aria-label="Project intent">
+          <section
+            className="grid gap-6 border-b border-border bg-muted/35 px-4 py-7 sm:grid-cols-2 sm:px-5"
+            aria-label="Project intent"
+            data-resume-section="intent"
+          >
             <form action="/api/projects" method="post">
               <input type="hidden" name="action" value="update-objective" />
               <input type="hidden" name="id" value={project.id} />
@@ -167,147 +114,34 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             </form>
           </section>
 
-          <section className="border-b border-border py-7" aria-labelledby="roadmap-heading">
-            <div className="flex flex-wrap items-end justify-between gap-4">
+
+
+          <section
+            className="border-b border-border py-7"
+            aria-labelledby="resume-now-heading"
+            data-resume-section="now"
+            data-lane="now"
+          >
+            <div className="flex items-end justify-between gap-4">
               <div>
-                <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-                  Prioritized Features
-                </p>
-                <h2 id="roadmap-heading" className="mt-2 text-xl font-semibold tracking-tight">Roadmap</h2>
+                <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Current focus</p>
+                <h2 id="resume-now-heading" className="mt-2 text-xl font-semibold tracking-tight">Now Lane</h2>
               </div>
-              <p className="max-w-sm text-xs leading-5 text-muted-foreground">
-                Lane sets when a Feature is planned. Done is tracked separately.
-              </p>
+              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                {nowFeatures.length} {nowFeatures.length === 1 ? "Feature" : "Features"}
+              </span>
             </div>
-
-            <form action="/api/projects" method="post" className="mt-5 grid gap-3 border-y border-border py-4 sm:grid-cols-[minmax(0,1fr)_9rem_auto_auto] sm:items-end">
-              <input type="hidden" name="action" value="create-feature" />
-              <input type="hidden" name="id" value={project.id} />
-              <label>
-                <span className="text-xs font-medium">Feature title</span>
-                <input
-                  name="title"
-                  required
-                  placeholder="What belongs on the roadmap?"
-                  className="mt-1.5 h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                />
-              </label>
-              <label>
-                <span className="text-xs font-medium">Lane</span>
-                <select
-                  name="lane"
-                  defaultValue="now"
-                  className="mt-1.5 h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  {featureLanes.map((lane) => (
-                    <option key={lane.value} value={lane.value}>{lane.label}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex h-10 items-center gap-2 text-xs font-medium">
-                <input type="checkbox" name="done" className="size-4 accent-foreground" />
-                Done
-              </label>
-              <Button type="submit">Add Feature</Button>
-            </form>
-
-            <div className="mt-5 space-y-6">
-              {featureLanes.map((lane) => {
-                const laneFeatures = roadmap.filter((feature) => feature.lane === lane.value);
-                return (
-                  <section key={lane.value} data-lane={lane.value} aria-labelledby={`lane-${lane.value}`}>
-                    <div className="flex items-baseline justify-between border-b border-border pb-2">
-                      <h3 id={`lane-${lane.value}`} className="text-sm font-semibold">{lane.label}</h3>
-                      <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                        {laneFeatures.length} {laneFeatures.length === 1 ? "Feature" : "Features"}
-                      </span>
-                    </div>
-                    {laneFeatures.length ? (
-                      <div className="divide-y divide-border">
-                        {laneFeatures.map((feature) => (
-                          <article key={feature.id} data-feature-id={feature.id} className="py-4">
-                            <div className="flex flex-wrap items-center gap-3">
-                              <span className={`font-mono text-[9px] uppercase tracking-[0.14em] ${feature.done ? "text-foreground" : "text-muted-foreground"}`}>
-                                {feature.done ? "Done" : "Open"}
-                              </span>
-                              <h4 className={`min-w-0 flex-1 text-sm font-medium ${feature.done ? "line-through text-muted-foreground" : ""}`}>
-                                {feature.title}
-                              </h4>
-                              <form action="/api/projects" method="post">
-                                <input type="hidden" name="action" value="rank-feature" />
-                                <input type="hidden" name="id" value={project.id} />
-                                <input type="hidden" name="featureId" value={feature.id} />
-                                <input type="hidden" name="direction" value="up" />
-                                <Button type="submit" variant="ghost" className="size-8 p-0" aria-label={`Rank ${feature.title} earlier`}>
-                                  <ArrowUp aria-hidden="true" className="size-3.5" />
-                                </Button>
-                              </form>
-                              <form action="/api/projects" method="post">
-                                <input type="hidden" name="action" value="rank-feature" />
-                                <input type="hidden" name="id" value={project.id} />
-                                <input type="hidden" name="featureId" value={feature.id} />
-                                <input type="hidden" name="direction" value="down" />
-                                <Button type="submit" variant="ghost" className="size-8 p-0" aria-label={`Rank ${feature.title} later`}>
-                                  <ArrowDown aria-hidden="true" className="size-3.5" />
-                                </Button>
-                              </form>
-                            </div>
-                            <details className="mt-3 border-t border-dashed border-border pt-3">
-                              <summary className="cursor-pointer text-xs font-medium">Edit Feature</summary>
-                              <form action="/api/projects" method="post" className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_9rem_auto_auto] sm:items-end">
-                                <input type="hidden" name="action" value="edit-feature" />
-                                <input type="hidden" name="id" value={project.id} />
-                                <input type="hidden" name="featureId" value={feature.id} />
-                                <label>
-                                  <span className="text-xs font-medium">Feature title</span>
-                                  <input
-                                    name="title"
-                                    required
-                                    defaultValue={feature.title}
-                                    className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                  />
-                                </label>
-                                <label>
-                                  <span className="text-xs font-medium">Lane</span>
-                                  <select
-                                    name="lane"
-                                    defaultValue={feature.lane}
-                                    className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                  >
-                                    {featureLanes.map((candidate) => (
-                                      <option key={candidate.value} value={candidate.value}>{candidate.label}</option>
-                                    ))}
-                                  </select>
-                                </label>
-                                <label className="flex h-9 items-center gap-2 text-xs font-medium">
-                                  <input type="checkbox" name="done" defaultChecked={feature.done} className="size-4 accent-foreground" />
-                                  Done
-                                </label>
-                                <Button type="submit" variant="outline">Save Feature</Button>
-                              </form>
-                            </details>
-                            <form action="/api/projects" method="post" className="mt-2">
-                              <input type="hidden" name="action" value="delete-feature" />
-                              <input type="hidden" name="id" value={project.id} />
-                              <input type="hidden" name="featureId" value={feature.id} />
-                              <Button type="submit" variant="ghost" className="px-0 text-muted-foreground hover:text-foreground">
-                                <Trash2 aria-hidden="true" className="size-3.5" />
-                                Delete Feature
-                              </Button>
-                            </form>
-                          </article>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="py-4 text-sm text-muted-foreground">No Features in this Lane.</p>
-                    )}
-                  </section>
-                );
-              })}
-            </div>
+            {nowFeatures.length ? (
+              <FeatureList features={nowFeatures} projectId={project.id} />
+            ) : (
+              <TeachingEmptyState
+                title="Choose the Features that deserve attention now"
+                description="Move a Feature into the Now Lane when it is part of the current push. Keep this list short and ranked."
+              />
+            )}
           </section>
 
-          <section className="border-b border-border py-7">
+          <section className="border-b border-border py-7" data-resume-section="story">
             <div className="flex items-baseline justify-between gap-4">
               <div>
                 <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
@@ -387,11 +221,141 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                 )}
               </div>
             ) : (
-              <p className="mt-5 border-y border-border py-6 text-sm text-muted-foreground">
-                No Journal Entries or Decisions yet.
-              </p>
+              <TeachingEmptyState
+                title="Leave a trail for future you"
+                description="Record what changed and why it mattered. Journal Entries and Decisions become the Project's resume context."
+              />
             )}
           </section>
+          <section className="border-b border-border py-7" aria-labelledby="roadmap-heading">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+                  Prioritized Features
+                </p>
+                <h2 id="roadmap-heading" className="mt-2 text-xl font-semibold tracking-tight">Roadmap</h2>
+              </div>
+              <p className="max-w-sm text-xs leading-5 text-muted-foreground">
+                Lane sets when a Feature is planned. Done is tracked separately.
+              </p>
+            </div>
+
+            <form action="/api/projects" method="post" className="mt-5 grid gap-3 border-y border-border py-4 sm:grid-cols-[minmax(0,1fr)_9rem_auto_auto] sm:items-end">
+              <input type="hidden" name="action" value="create-feature" />
+              <input type="hidden" name="id" value={project.id} />
+              <label>
+                <span className="text-xs font-medium">Feature title</span>
+                <input
+                  name="title"
+                  required
+                  placeholder="What belongs on the roadmap?"
+                  className="mt-1.5 h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </label>
+              <label>
+                <span className="text-xs font-medium">Lane</span>
+                <select
+                  name="lane"
+                  defaultValue="now"
+                  className="mt-1.5 h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {featureLanes.map((lane) => (
+                    <option key={lane.value} value={lane.value}>{lane.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex h-10 items-center gap-2 text-xs font-medium">
+                <input type="checkbox" name="done" className="size-4 accent-foreground" />
+                Done
+              </label>
+              <Button type="submit">Add Feature</Button>
+            </form>
+
+            {roadmap.length === 0 ? (
+              <TeachingEmptyState
+                title="Shape the first Now Lane"
+                description="Add a Feature, place it in Now, Next, Later, or Icebox, and mark it Done independently when it ships."
+              />
+            ) : (
+              <div className="mt-5 space-y-6">
+                {featureLanes.slice(1).map((lane) => {
+                  const laneFeatures = roadmap.filter((feature) => feature.lane === lane.value);
+                  return (
+                    <section key={lane.value} data-lane={lane.value} aria-labelledby={`lane-${lane.value}`}>
+                      <div className="flex items-baseline justify-between border-b border-border pb-2">
+                        <h3 id={`lane-${lane.value}`} className="text-sm font-semibold">{lane.label}</h3>
+                        <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                          {laneFeatures.length} {laneFeatures.length === 1 ? "Feature" : "Features"}
+                        </span>
+                      </div>
+                      {laneFeatures.length ? (
+                        <FeatureList features={laneFeatures} projectId={project.id} />
+                      ) : (
+                        <p className="py-4 text-sm text-muted-foreground">No Features in this Lane.</p>
+                      )}
+                    </section>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          {originIdea ? (
+            <div className="border-b border-border py-5">
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Origin Idea</p>
+              <Link
+                href={`/?view=archived#idea-${originIdea.id}`}
+                className="mt-2 inline-flex text-sm font-medium underline-offset-4 hover:underline"
+              >
+                {originIdea.title}
+              </Link>
+            </div>
+          ) : null}
+
+          <dl className="grid gap-6 border-b border-border py-7 sm:grid-cols-2">
+            <div>
+              <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Repository</dt>
+              <dd className="mt-2 text-sm">
+                {project.repositoryUrl ? (
+                  <a
+                    href={project.repositoryUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 font-medium underline-offset-4 hover:underline"
+                  >
+                    <GitBranch aria-hidden="true" className="size-4" />
+                    {project.repositoryUrl}
+                    <ExternalLink aria-hidden="true" className="size-3" />
+                  </a>
+                ) : (
+                  <span className="text-muted-foreground">Not set</span>
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Deployed</dt>
+              <dd className="mt-2 text-sm">
+                {project.deployedUrl ? (
+                  <a
+                    href={project.deployedUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 font-medium underline-offset-4 hover:underline"
+                  >
+                    <Rocket aria-hidden="true" className="size-4" />
+                    {project.deployedUrl}
+                    <ExternalLink aria-hidden="true" className="size-3" />
+                  </a>
+                ) : (
+                  <span className="text-muted-foreground">Not deployed</span>
+                )}
+              </dd>
+            </div>
+            <div className="sm:col-span-2">
+              <dt className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Stack</dt>
+              <dd className="mt-2 text-sm">{project.stack || <span className="text-muted-foreground">Not set</span>}</dd>
+            </div>
+          </dl>
 
           <section className="py-7">
             <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Lifecycle State history</p>
@@ -502,6 +466,119 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         </aside>
       </div>
     </main>
+  );
+}
+
+function TeachingEmptyState({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="mt-5 border-y border-border py-8 text-center">
+      <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
+      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">{description}</p>
+    </div>
+  );
+}
+
+function FeatureList({ features, projectId }: { features: Feature[]; projectId: string }) {
+  return (
+    <div className="divide-y divide-border">
+      {features.map((feature) => (
+        <article key={feature.id} data-feature-id={feature.id} className="py-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <span
+              className={`font-mono text-[9px] uppercase tracking-[0.14em] ${
+                feature.done ? "text-foreground" : "text-muted-foreground"
+              }`}
+            >
+              {feature.done ? "Done" : "Open"}
+            </span>
+            <h4
+              className={`min-w-0 flex-1 text-sm font-medium ${
+                feature.done ? "line-through text-muted-foreground" : ""
+              }`}
+            >
+              {feature.title}
+            </h4>
+            <form action="/api/projects" method="post">
+              <input type="hidden" name="action" value="rank-feature" />
+              <input type="hidden" name="id" value={projectId} />
+              <input type="hidden" name="featureId" value={feature.id} />
+              <input type="hidden" name="direction" value="up" />
+              <Button
+                type="submit"
+                variant="ghost"
+                className="size-8 p-0"
+                aria-label={`Rank ${feature.title} earlier`}
+              >
+                <ArrowUp aria-hidden="true" className="size-3.5" />
+              </Button>
+            </form>
+            <form action="/api/projects" method="post">
+              <input type="hidden" name="action" value="rank-feature" />
+              <input type="hidden" name="id" value={projectId} />
+              <input type="hidden" name="featureId" value={feature.id} />
+              <input type="hidden" name="direction" value="down" />
+              <Button
+                type="submit"
+                variant="ghost"
+                className="size-8 p-0"
+                aria-label={`Rank ${feature.title} later`}
+              >
+                <ArrowDown aria-hidden="true" className="size-3.5" />
+              </Button>
+            </form>
+          </div>
+          <details className="mt-3 border-t border-dashed border-border pt-3">
+            <summary className="cursor-pointer text-xs font-medium">Edit Feature</summary>
+            <form
+              action="/api/projects"
+              method="post"
+              className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_9rem_auto_auto] sm:items-end"
+            >
+              <input type="hidden" name="action" value="edit-feature" />
+              <input type="hidden" name="id" value={projectId} />
+              <input type="hidden" name="featureId" value={feature.id} />
+              <label>
+                <span className="text-xs font-medium">Feature title</span>
+                <input
+                  name="title"
+                  required
+                  defaultValue={feature.title}
+                  className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </label>
+              <label>
+                <span className="text-xs font-medium">Lane</span>
+                <select
+                  name="lane"
+                  defaultValue={feature.lane}
+                  className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {featureLanes.map((candidate) => (
+                    <option key={candidate.value} value={candidate.value}>
+                      {candidate.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex h-9 items-center gap-2 text-xs font-medium">
+                <input type="checkbox" name="done" defaultChecked={feature.done} className="size-4 accent-foreground" />
+                Done
+              </label>
+              <Button type="submit" variant="outline">Save Feature</Button>
+            </form>
+          </details>
+          <form action="/api/projects" method="post" className="mt-2">
+            <input type="hidden" name="action" value="delete-feature" />
+            <input type="hidden" name="id" value={projectId} />
+            <input type="hidden" name="featureId" value={feature.id} />
+            <Button type="submit" variant="ghost" className="px-0 text-muted-foreground hover:text-foreground">
+              <Trash2 aria-hidden="true" className="size-3.5" />
+              Delete Feature
+            </Button>
+          </form>
+        </article>
+      ))}
+    </div>
   );
 }
 

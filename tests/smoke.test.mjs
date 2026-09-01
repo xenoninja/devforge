@@ -57,7 +57,9 @@ test("visitor can manage Ideas and a Project story", async () => {
   }
 
   const emptyDashboard = await fetch(baseUrl, { headers: { cookie: sessionCookie } });
-  assert.match(await emptyDashboard.text(), /Capture your first idea/);
+  const emptyDashboardHtml = await emptyDashboard.text();
+  assert.match(emptyDashboardHtml, /Capture your first idea/);
+  assert.match(emptyDashboardHtml, /Promote it when the thought becomes committed work/);
 
   const missingTitle = await fetch(`${baseUrl}/api/ideas`, {
     method: "POST",
@@ -137,6 +139,8 @@ test("visitor can manage Ideas and a Project story", async () => {
   assert.match(promotedProjectHtml, /Exploring/);
   assert.match(promotedProjectHtml, /Origin Idea/);
   assert.match(promotedProjectHtml, new RegExp(`\\/\\?view=archived#idea-${firstIdeaId}`));
+  assert.match(promotedProjectHtml, /Choose the Features that deserve attention now/);
+  assert.match(promotedProjectHtml, /Record what changed and why it mattered/);
 
   const projectLocation = promoted.headers.get("location");
   const projectId = projectLocation?.split("/").at(-1);
@@ -162,7 +166,7 @@ test("visitor can manage Ideas and a Project story", async () => {
     headers: { cookie: sessionCookie },
   });
   let roadmapHtml = await roadmapPage.text();
-  assert.match(roadmapHtml, /Roadmap[\s\S]*Now[\s\S]*Ship Feature roadmap/);
+  assert.match(roadmapHtml, /data-resume-section="now"[\s\S]*Ship Feature roadmap/);
   const roadmapFeatureId = roadmapHtml.match(
     /<article[^>]*data-feature-id="([^"]+)"[^>]*>(?:(?!<\/article>)[\s\S])*?Ship Feature roadmap/,
   )?.[1];
@@ -403,6 +407,12 @@ test("visitor can manage Ideas and a Project story", async () => {
     intentHtml,
     /data-story-type="journal-entry"[^>]*>[\s\S]*Previous Next Action[\s\S]*Fix the CI/,
   );
+  const intentPosition = intentHtml.indexOf('data-resume-section="intent"');
+  const nowPosition = intentHtml.indexOf('data-resume-section="now"');
+  const storyPosition = intentHtml.indexOf('data-resume-section="story"');
+  assert.ok(intentPosition >= 0);
+  assert.ok(intentPosition < nowPosition);
+  assert.ok(nowPosition < storyPosition);
 
   const intentDashboard = await fetch(baseUrl, { headers: { cookie: sessionCookie } });
   const intentDashboardHtml = await intentDashboard.text();
