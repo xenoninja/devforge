@@ -156,6 +156,14 @@ export async function createDecision(projectId: string, decided: string, rationa
   });
 }
 
+export async function updateObjective(projectId: string, objective: string) {
+  await updateProjectIntent(projectId, "objective", objective);
+}
+
+export async function updateNextAction(projectId: string, nextAction: string) {
+  await updateProjectIntent(projectId, "nextAction", nextAction);
+}
+
 export async function createProject(input: {
   name: string;
   description: string;
@@ -239,6 +247,46 @@ export function lifecycleStateLabel(state: LifecycleState) {
 }
 
 type ProjectTransaction = Parameters<Parameters<ReturnType<typeof getDatabase>["transaction"]>[0]>[0];
+
+type ProjectIntentField = "objective" | "nextAction";
+
+async function updateProjectIntent(projectId: string, field: ProjectIntentField, value: string) {
+  const id = requireId(projectId, "Project");
+  const label = field === "objective" ? "Objective" : "Next Action";
+  const content = requireText(value, `A ${label} is required`);
+  const source: ActivitySource = field === "objective" ? "objective" : "next_action";
+
+  await getDatabase().transaction(async (transaction) => {
+    const [project] = await transaction
+      .select({ objective: projectsTable.objective, nextAction: projectsTable.nextAction })
+      .from(projectsTable)
+      .where(eq(projectsTable.id, id))
+      .limit(1)
+      .for("update");
+
+    if (!project) throw new ProjectInputError("Project not found");
+
+    const previous = project[field];
+    if (previous === content) return;
+    const now = new Date();
+    if (previous) {
+      await transaction.insert(journalEntries).values({
+        projectId: id,
+        markdown: `**Previous ${label}**\n\n${previous}`,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    const intentUpdate =
+      field === "objective" ? { objective: content } : { nextAction: content };
+    await transaction
+      .update(projectsTable)
+      .set({ ...intentUpdate, lastActivityAt: now, updatedAt: now })
+      .where(eq(projectsTable.id, id));
+    await transaction.insert(activities).values({ projectId: id, source, createdAt: now });
+  });
+}
 
 async function recordActivity(
   transaction: ProjectTransaction,

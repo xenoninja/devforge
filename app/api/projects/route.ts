@@ -8,6 +8,8 @@ import {
   deleteJournalEntry,
   editJournalEntry,
   ProjectInputError,
+  updateNextAction,
+  updateObjective,
 } from "@/lib/projects";
 
 export async function POST(request: NextRequest) {
@@ -51,6 +53,16 @@ export async function POST(request: NextRequest) {
       case "create-decision": {
         const projectId = field(form, "id");
         await createDecision(projectId, field(form, "decided"), field(form, "rationale"));
+        return redirectToProject(projectId);
+      }
+      case "update-objective": {
+        const projectId = field(form, "id");
+        await updateObjective(projectId, field(form, "objective"));
+        return redirectToProject(projectId);
+      }
+      case "update-next-action": {
+        const projectId = field(form, "id");
+        await updateNextAction(projectId, field(form, "nextAction"));
         return redirectToProject(projectId);
       }
       default:

@@ -113,6 +113,56 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             </div>
           </dl>
 
+          <section className="grid gap-6 border-b border-border py-7 sm:grid-cols-2" aria-label="Project intent">
+            <form action="/api/projects" method="post">
+              <input type="hidden" name="action" value="update-objective" />
+              <input type="hidden" name="id" value={project.id} />
+              <label className="block">
+                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                  Objective
+                </span>
+                <textarea
+                  name="objective"
+                  required
+                  rows={4}
+                  defaultValue={project.objective ?? ""}
+                  placeholder="What is this Project driving toward?"
+                  className="mt-2 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm leading-6 outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </label>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                Replacing the Objective archives its prior value in the Journal.
+              </p>
+              <Button type="submit" variant="outline" className="mt-3">
+                {project.objective ? "Replace Objective" : "Set Objective"}
+              </Button>
+            </form>
+
+            <form action="/api/projects" method="post">
+              <input type="hidden" name="action" value="update-next-action" />
+              <input type="hidden" name="id" value={project.id} />
+              <label className="block">
+                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                  Next Action
+                </span>
+                <textarea
+                  name="nextAction"
+                  required
+                  rows={4}
+                  defaultValue={project.nextAction ?? ""}
+                  placeholder="What is the next concrete step?"
+                  className="mt-2 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm leading-6 outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </label>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                Free-standing from the roadmap. Replacing it archives the prior value.
+              </p>
+              <Button type="submit" variant="outline" className="mt-3">
+                {project.nextAction ? "Replace Next Action" : "Set Next Action"}
+              </Button>
+            </form>
+          </section>
+
           <section className="border-b border-border py-7">
             <div className="flex items-baseline justify-between gap-4">
               <div>

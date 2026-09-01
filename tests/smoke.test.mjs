@@ -216,6 +216,42 @@ test("visitor can manage Ideas and a Project story", async () => {
   assert.match(revisedStoryHtml, /Revised with/);
   assert.doesNotMatch(revisedStoryHtml, /Newest Journal Entry/);
 
+  await writeProjectStory({
+    action: "update-objective",
+    objective: "Ship the first usable cockpit",
+  });
+  await writeProjectStory({
+    action: "update-next-action",
+    nextAction: "Fix the CI",
+  });
+  await writeProjectStory({
+    action: "update-objective",
+    objective: "Prove the daily project workflow",
+  });
+  await writeProjectStory({
+    action: "update-next-action",
+    nextAction: "Deploy the cockpit",
+  });
+
+  const intentPage = await fetch(new URL(projectLocation, baseUrl), {
+    headers: { cookie: sessionCookie },
+  });
+  const intentHtml = await intentPage.text();
+  assert.match(intentHtml, /Objective[\s\S]*Prove the daily project workflow/);
+  assert.match(intentHtml, /Next Action[\s\S]*Deploy the cockpit/);
+  assert.match(
+    intentHtml,
+    /data-story-type="journal-entry"[^>]*>[\s\S]*Previous Objective[\s\S]*Ship the first usable cockpit/,
+  );
+  assert.match(
+    intentHtml,
+    /data-story-type="journal-entry"[^>]*>[\s\S]*Previous Next Action[\s\S]*Fix the CI/,
+  );
+
+  const intentDashboard = await fetch(baseUrl, { headers: { cookie: sessionCookie } });
+  const intentDashboardHtml = await intentDashboard.text();
+  assert.match(intentDashboardHtml, /First smoke idea[\s\S]*Objective[\s\S]*Prove the daily project workflow/);
+
 
   const discarded = await fetch(`${baseUrl}/api/ideas`, {
     method: "POST",

@@ -33,6 +33,8 @@ export const projects = pgTable(
     deployedUrl: text("deployed_url"),
     stack: text("stack").notNull(),
     lifecycleState: lifecycleState("lifecycle_state").notNull(),
+    objective: text("objective"),
+    nextAction: text("next_action"),
     originIdeaId: uuid("origin_idea_id").references(() => ideas.id),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

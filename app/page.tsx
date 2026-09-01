@@ -357,6 +357,14 @@ function ProjectGroup({ title, projects }: { title: string; projects: Project[] 
               </div>
             </div>
             <p className="mt-3 line-clamp-2 text-sm leading-6 text-muted-foreground">{project.description}</p>
+            {project.objective ? (
+              <p className="mt-3 line-clamp-3 text-sm leading-6">
+                <span className="mr-2 font-mono text-[9px] uppercase tracking-[0.16em] text-muted-foreground">
+                  Objective
+                </span>
+                {project.objective}
+              </p>
+            ) : null}
             <p className="mt-4 truncate font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
               {project.stack || "Stack not set"}
             </p>
