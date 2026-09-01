@@ -1,0 +1,30 @@
+services:
+  app:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://devforge:devforge@database:5432/devforge
+      DEVFORGE_PASSWORD: ${DEVFORGE_PASSWORD:?Set DEVFORGE_PASSWORD before starting DevForge}
+    depends_on:
+      database:
+        condition: service_healthy
+    ports:
+      - "${PORT:-3000}:3000"
+    restart: unless-stopped
+
+  database:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: devforge
+      POSTGRES_PASSWORD: devforge
+      POSTGRES_USER: devforge
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U devforge -d devforge"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
