@@ -326,6 +326,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                   item.type === "journal-entry" ? (
                     <article
                       key={item.id}
+                      id={`story-${item.id}`}
                       data-story-type="journal-entry"
                       data-story-id={item.id}
                       className="py-6"
@@ -368,6 +369,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                   ) : (
                     <article
                       key={item.id}
+                      id={`story-${item.id}`}
                       data-story-type="decision"
                       data-story-id={item.id}
                       className="py-6"

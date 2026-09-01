@@ -1,8 +1,10 @@
-import { Archive, ExternalLink, FolderGit2, Inbox, Lightbulb, Plus, Save, Trash2 } from "lucide-react";
+import { Archive, ExternalLink, FolderGit2, Inbox, Lightbulb, Plus, Save, Search, Trash2, X } from "lucide-react";
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { listTimeline, searchDashboard, type SearchResults, type TimelineItem } from "@/lib/dashboard";
 import { listIdeas, type IdeaView } from "@/lib/ideas";
 import { lifecycleStateLabel, lifecycleStates, listProjects, type Project } from "@/lib/projects";
 import { cn } from "@/lib/utils";
@@ -12,10 +14,17 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ q?: string; view?: string }>;
 }) {
-  const view: IdeaView = (await searchParams).view === "archived" ? "archived" : "inbox";
-  const [ideas, projects] = await Promise.all([listIdeas(view), listProjects()]);
+  const params = await searchParams;
+  const view: IdeaView = params.view === "archived" ? "archived" : "inbox";
+  const query = params.q?.trim() ?? "";
+  const [ideas, projects, timeline, searchResults] = await Promise.all([
+    listIdeas(view),
+    listProjects(),
+    listTimeline(),
+    searchDashboard(query),
+  ]);
   const building = projects.filter((project) => project.lifecycleState === "building");
   const exploring = projects.filter((project) => project.lifecycleState === "exploring");
   const releasedOrMaintenance = projects.filter(
@@ -25,13 +34,41 @@ export default async function DashboardPage({
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-6xl px-5 py-5 sm:px-8">
-      <header className="flex h-12 items-center justify-between border-b border-border">
-        <div className="flex items-baseline gap-3">
+      <header className="flex min-h-14 items-center gap-4 border-b border-border py-2">
+        <div className="flex shrink-0 items-baseline gap-3">
           <span className="text-sm font-semibold tracking-tight">DevForge</span>
-          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Cockpit</span>
+          <span className="hidden font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground sm:inline">
+            Cockpit
+          </span>
         </div>
+        <form action="/" method="get" role="search" className="relative ml-auto w-full max-w-md">
+          {view === "archived" ? <input type="hidden" name="view" value="archived" /> : null}
+          <Search
+            aria-hidden="true"
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+          />
+          <input
+            type="search"
+            name="q"
+            defaultValue={query}
+            aria-label="Search DevForge"
+            placeholder="Search Projects, Ideas, Journal, Decisions"
+            className="h-9 w-full rounded-md border border-input bg-background pl-9 pr-9 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          />
+          {query ? (
+            <Link
+              href={view === "archived" ? "/?view=archived" : "/"}
+              aria-label="Clear search"
+              className="absolute right-2 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-sm text-muted-foreground hover:text-foreground"
+            >
+              <X aria-hidden="true" className="size-3.5" />
+            </Link>
+          ) : null}
+        </form>
         <ThemeToggle />
       </header>
+
+      {query ? <SearchPanel query={query} results={searchResults} /> : null}
 
       <div className="grid gap-10 py-10 lg:grid-cols-[18rem_minmax(0,1fr)] lg:gap-14">
         <aside>
@@ -207,6 +244,8 @@ export default async function DashboardPage({
               </div>
             )}
           </section>
+          <TimelinePanel timeline={timeline} />
+
 
           <div className="mt-14 flex flex-wrap items-end justify-between gap-4 border-b border-border pb-4">
             <div>
@@ -324,6 +363,163 @@ export default async function DashboardPage({
         </section>
       </div>
     </main>
+  );
+}
+
+function SearchPanel({ query, results }: { query: string; results: SearchResults }) {
+  const resultCount =
+    results.projects.length + results.ideas.length + results.journalEntries.length + results.decisions.length;
+
+  return (
+    <aside aria-labelledby="search-results-heading" className="border-b border-border py-6">
+      <div className="flex items-baseline justify-between gap-4">
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+            Search · {resultCount}
+          </p>
+          <h2 id="search-results-heading" className="mt-1 text-xl font-semibold tracking-tight">
+            Results for “{query}”
+          </h2>
+        </div>
+      </div>
+      {resultCount === 0 ? (
+        <p className="mt-5 border-y border-border py-5 text-sm text-muted-foreground">No matching records.</p>
+      ) : (
+        <div className="mt-5 grid gap-x-8 gap-y-6 sm:grid-cols-2">
+          <SearchResultGroup title="Projects" type="projects" count={results.projects.length}>
+            {results.projects.map((project) => (
+              <Link
+                key={project.id}
+                href={`/projects/${project.id}`}
+                className="block py-2 text-sm font-medium underline-offset-4 hover:underline"
+              >
+                {project.name}
+              </Link>
+            ))}
+          </SearchResultGroup>
+          <SearchResultGroup title="Ideas" type="ideas" count={results.ideas.length}>
+            {results.ideas.map((idea) => (
+              <Link
+                key={idea.id}
+                href={idea.state === "inbox" ? `/#idea-${idea.id}` : `/?view=archived#idea-${idea.id}`}
+                className="block py-2"
+              >
+                <span className="block text-sm font-medium">{idea.title}</span>
+                {idea.notes ? (
+                  <span className="mt-1 line-clamp-2 block text-xs leading-5 text-muted-foreground">{idea.notes}</span>
+                ) : null}
+              </Link>
+            ))}
+          </SearchResultGroup>
+          <SearchResultGroup title="Journal Entries" type="journal-entries" count={results.journalEntries.length}>
+            {results.journalEntries.map((entry) => (
+              <Link key={entry.id} href={`/projects/${entry.projectId}#story-${entry.id}`} className="block py-2">
+                <span className="line-clamp-2 block text-sm leading-6">{entry.markdown}</span>
+                <span className="mt-1 block font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                  {entry.projectName}
+                </span>
+              </Link>
+            ))}
+          </SearchResultGroup>
+          <SearchResultGroup title="Decisions" type="decisions" count={results.decisions.length}>
+            {results.decisions.map((decision) => (
+              <Link key={decision.id} href={`/projects/${decision.projectId}#story-${decision.id}`} className="block py-2">
+                <span className="block text-sm font-medium">{decision.decided}</span>
+                <span className="mt-1 line-clamp-2 block text-xs leading-5 text-muted-foreground">
+                  {decision.rationale}
+                </span>
+                <span className="mt-1 block font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                  {decision.projectName}
+                </span>
+              </Link>
+            ))}
+          </SearchResultGroup>
+        </div>
+      )}
+    </aside>
+  );
+}
+
+function SearchResultGroup({
+  children,
+  count,
+  title,
+  type,
+}: {
+  children: ReactNode;
+  count: number;
+  title: string;
+  type: string;
+}) {
+  if (count === 0) return null;
+
+  return (
+    <section data-search-group={type}>
+      <h3 className="border-b border-border pb-2 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+        {title} · {count}
+      </h3>
+      <div className="divide-y divide-border">{children}</div>
+    </section>
+  );
+}
+
+function TimelinePanel({ timeline }: { timeline: TimelineItem[] }) {
+  return (
+    <section aria-labelledby="timeline-heading" className="mt-14">
+      <div className="flex items-end justify-between gap-4 border-b border-border pb-4">
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+            Across Projects · {timeline.length}
+          </p>
+          <h2 id="timeline-heading" className="mt-1 text-2xl font-semibold tracking-tight">
+            Timeline
+          </h2>
+        </div>
+        <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Newest first</span>
+      </div>
+
+      {timeline.length ? (
+        <div className="divide-y divide-border">
+          {timeline.map((item) => (
+            <Link
+              key={`${item.type}-${item.id}`}
+              href={`/projects/${item.projectId}#story-${item.id}`}
+              data-timeline-type={item.type}
+              className="grid gap-2 py-5 sm:grid-cols-[8rem_minmax(0,1fr)_auto] sm:items-start"
+            >
+              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                {item.type === "journal-entry" ? "Journal Entry" : "Decision"}
+              </span>
+              <span>
+                {item.type === "journal-entry" ? (
+                  <span className="line-clamp-3 block whitespace-pre-wrap text-sm leading-6">{item.markdown}</span>
+                ) : (
+                  <>
+                    <span className="block text-sm font-semibold">{item.decided}</span>
+                    <span className="mt-1 line-clamp-2 block text-sm leading-6 text-muted-foreground">
+                      {item.rationale}
+                    </span>
+                  </>
+                )}
+                <span className="mt-2 block font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                  {item.projectName}
+                </span>
+              </span>
+              <time
+                dateTime={item.createdAt.toISOString()}
+                className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground"
+              >
+                {formatDate(item.createdAt)}
+              </time>
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <p className="border-b border-border py-6 text-sm text-muted-foreground">
+          No Journal Entries or Decisions yet.
+        </p>
+      )}
+    </section>
   );
 }
 

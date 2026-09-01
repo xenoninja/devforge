@@ -17,6 +17,7 @@ import {
   lifecycleStateChanges,
   projects as projectsTable,
 } from "@/lib/db/schema";
+import { interleaveStoryItems } from "@/lib/story";
 
 export const lifecycleStates = [
   { value: "exploring", label: "Exploring" },
@@ -124,13 +125,7 @@ export async function listProjectStory(id: string): Promise<ProjectStoryItem[]> 
     database.select().from(decisions).where(eq(decisions.projectId, projectId)),
   ]);
 
-  return [
-    ...entries.map((entry) => ({ ...entry, type: "journal-entry" as const })),
-    ...projectDecisions.map((decision) => ({ ...decision, type: "decision" as const })),
-  ].sort((left, right) => {
-    const byDate = right.createdAt.getTime() - left.createdAt.getTime();
-    return byDate || right.id.localeCompare(left.id);
-  });
+  return interleaveStoryItems(entries, projectDecisions);
 }
 
 export async function createJournalEntry(projectId: string, markdown: string) {

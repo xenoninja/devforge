@@ -325,6 +325,36 @@ test("visitor can manage Ideas and a Project story", async () => {
   );
   assert.equal(journalEntryIds.length, 2);
 
+  const decisionId = storyHtml.match(/data-story-type="decision" data-story-id="([^"]+)"/)?.[1];
+  assert.ok(decisionId);
+
+  const timelineDashboard = await fetch(baseUrl, { headers: { cookie: sessionCookie } });
+  const timelineHtml = await timelineDashboard.text();
+  const timeline = timelineHtml.match(
+    /<section[^>]*aria-labelledby="timeline-heading"[^>]*>[\s\S]*?<\/section>/,
+  )?.[0];
+  assert.match(timeline ?? "", /Newest Journal Entry/);
+  assert.match(timeline ?? "", /Keep Journal Entries in Markdown/);
+  assert.match(timeline ?? "", /Built/);
+  assert.ok((timeline?.indexOf("Newest Journal Entry") ?? -1) < (timeline?.indexOf("Keep Journal Entries in Markdown") ?? -1));
+  assert.ok((timeline?.indexOf("Keep Journal Entries in Markdown") ?? -1) < (timeline?.indexOf("Built") ?? -1));
+  assert.match(timeline ?? "", new RegExp(`href="/projects/${projectId}#story-${journalEntryIds[0]}"`));
+  assert.match(timeline ?? "", new RegExp(`href="/projects/${projectId}#story-${decisionId}"`));
+
+  const portfolioSearch = await fetch(`${baseUrl}/?q=smoke`, { headers: { cookie: sessionCookie } });
+  const portfolioSearchHtml = await portfolioSearch.text();
+  assert.match(portfolioSearchHtml, /data-search-group="projects"[\s\S]*First smoke idea/);
+  assert.match(portfolioSearchHtml, new RegExp(`href="/projects/${projectId}"`));
+  assert.match(portfolioSearchHtml, /data-search-group="ideas"[\s\S]*Second smoke idea, revised/);
+  assert.match(portfolioSearchHtml, new RegExp(`href="/\\?view=archived#idea-${firstIdeaId}"`));
+
+  const storySearch = await fetch(`${baseUrl}/?q=Journal`, { headers: { cookie: sessionCookie } });
+  const storySearchHtml = await storySearch.text();
+  assert.match(storySearchHtml, /data-search-group="journal-entries"[\s\S]*Newest Journal Entry/);
+  assert.match(storySearchHtml, /data-search-group="decisions"[\s\S]*Keep Journal Entries in Markdown/);
+  assert.match(storySearchHtml, new RegExp(`href="/projects/${projectId}#story-${journalEntryIds[0]}"`));
+  assert.match(storySearchHtml, new RegExp(`href="/projects/${projectId}#story-${decisionId}"`));
+
   await writeProject({
     action: "edit-journal-entry",
     entryId: journalEntryIds[1],
