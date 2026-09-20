@@ -6,9 +6,10 @@ import { join } from 'node:path';
 import { once } from 'node:events';
 import { DatabaseSync } from 'node:sqlite';
 
-export const test = base.extend<{ appURL: string; captureOnlyData: boolean }>({
+export const test = base.extend<{ appURL: string; captureOnlyData: boolean; activeProjectsData: boolean }>({
   captureOnlyData: [false, { option: true }],
-  appURL: async ({ captureOnlyData }, use) => {
+  activeProjectsData: [false, { option: true }],
+  appURL: async ({ captureOnlyData, activeProjectsData }, use) => {
     const directory = await mkdtemp(join(tmpdir(), 'devforge-browser-'));
     if (captureOnlyData) {
       // The released capture-only schema is input to the upgrade; assertions remain in the browser.
@@ -23,6 +24,25 @@ export const test = base.extend<{ appURL: string; captureOnlyData: boolean }>({
           updated_at TEXT NOT NULL
         ) STRICT;
         INSERT INTO ideas VALUES (7, 'Existing idea', 'Original notes', 'new',
+          '2026-09-01T00:00:00.000Z', '2026-09-02T00:00:00.000Z');
+      `);
+      database.close();
+    }
+    if (activeProjectsData) {
+      // Released project schema is upgrade input; verify preservation through the browser.
+      const database = new DatabaseSync(join(directory, 'devforge.sqlite'));
+      database.exec(`
+        CREATE TABLE projects (
+          id INTEGER PRIMARY KEY,
+          title TEXT NOT NULL CHECK(length(trim(title)) > 0),
+          description TEXT NOT NULL DEFAULT '',
+          repository_url TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'experimenting' CHECK(status IN ('experimenting', 'developing')),
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        ) STRICT;
+        INSERT INTO projects VALUES (12, 'Existing project', 'Original project notes',
+          'https://github.com/example/legacy', 'developing',
           '2026-09-01T00:00:00.000Z', '2026-09-02T00:00:00.000Z');
       `);
       database.close();

@@ -1,4 +1,4 @@
-import type { Project, ProjectInput } from './projects.js';
+import type { Project, ProjectInput, ProjectStatusFilter } from './projects.js';
 import type { Idea, IdeaStatusFilter } from './ideas.js';
 
 function escape(text: string): string {
@@ -23,7 +23,7 @@ function ideaCards(ideas: Idea[]): string {
 
 export function home(ideas: Idea[], experimenting: Project[], developing: Project[]): string {
   return layout('Home', `<div class="page-heading"><div><p class="eyebrow">Your workspace</p><h1>Ideas &amp; projects</h1>
-    <p class="muted">Small sparks. Possibilities worth keeping.</p><a href="/ideas">Browse all ideas</a></div><div class="actions"><a class="button" href="/ideas/new">Add idea</a><a class="button" href="/projects/new">Add project</a></div></div>
+    <p class="muted">Small sparks. Possibilities worth keeping.</p><div class="actions"><a href="/ideas">Browse all ideas</a><a href="/projects">Browse all projects</a></div></div><div class="actions"><a class="button" href="/ideas/new">Add idea</a><a class="button" href="/projects/new">Add project</a></div></div>
     <section aria-labelledby="new-ideas"><div class="section-heading"><h2 id="new-ideas">New ideas <span class="count">${ideas.length}</span></h2><span class="muted">Recently updated first</span></div>
     ${ideas.length ? ideaCards(ideas) : '<div class="empty"><div class="spark" aria-hidden="true">✳</div><h3>No ideas yet</h3><p>Have something in mind? Add your first idea and give it a home.</p></div>'}</section>${projectSection(experimenting, 'experimenting')}${projectSection(developing, 'developing')}`);
 }
@@ -79,9 +79,26 @@ export function projectForm(error = '', input: ProjectInput = { title: '', descr
 }
 
 export function projectDetail(project: Project): string {
-  return layout(project.title, `<a class="back" href="/">Home</a><p class="eyebrow">Project</p><h1>${escape(project.title)}</h1><span class="badge">${project.status === 'experimenting' ? 'Experimenting' : 'Developing'}</span>
+  return layout(project.title, `<a class="back" href="/">Home</a><a class="back" href="/projects">All projects</a><p class="eyebrow">Project</p><h1>${escape(project.title)}</h1><span class="badge">${project.status === 'experimenting' ? 'Experimenting' : project.status === 'developing' ? 'Developing' : 'Abandoned'}</span>
     <div class="actions"><a class="button" href="/projects/${project.id}/edit">Edit project</a></div>
+    <form method="post" action="/projects/${project.id}/status">
+      <label for="status">Change status</label><select id="status" name="status">
+      ${(['experimenting', 'developing', 'abandoned'] as const).filter(status => status !== project.status).map(status => `<option value="${status}">${status === 'experimenting' ? 'Experimenting' : status === 'developing' ? 'Developing' : 'Abandoned'}</option>`).join('')}</select>
+      <div class="actions"><button type="submit">Save status</button></div>
+    </form>
     <section class="detail"><h2>Description</h2>${project.description ? `<p class="description">${escape(project.description)}</p>` : '<p class="muted">No description yet.</p>'}</section>
     <section class="detail"><h2>Repository</h2>${project.repository_url ? `<a class="repository" href="${escape(project.repository_url)}" rel="noreferrer">${escape(project.repository_url)}</a>` : '<p class="muted">No repository link yet.</p>'}</section>
     <dl class="timestamps"><div><dt>Created</dt><dd>${time(project.created_at)}</dd></div><div><dt>Last updated</dt><dd>${time(project.updated_at)}</dd></div></dl>`);
+}
+
+export function projectList(projects: Project[], status: ProjectStatusFilter, search: string): string {
+  return layout('All projects', `<a class="back" href="/">← Home</a>
+    <div class="page-heading"><h1>All projects</h1><a class="button" href="/projects/new">Add project</a></div>
+    <form method="get" action="/projects">
+      <label for="status">Status</label><select id="status" name="status">
+      ${['all', 'experimenting', 'developing', 'abandoned'].map(value => `<option value="${value}" ${value === status ? 'selected' : ''}>${value === 'all' ? 'All statuses' : value[0]!.toUpperCase() + value.slice(1)}</option>`).join('')}</select>
+      <label for="search">Search titles</label><input id="search" name="search" type="search" value="${escape(search)}">
+      <div class="actions"><button type="submit">Apply filters</button><a href="/projects">Clear filters</a></div>
+    </form><p class="muted">Recently updated first</p>
+    ${projects.length ? `<ul class="ideas">${projects.map(project => `<li><a href="/projects/${project.id}">${escape(project.title)}</a><span class="badge">${project.status[0]!.toUpperCase() + project.status.slice(1)}</span><p class="muted">Updated ${time(project.updated_at)}</p></li>`).join('')}</ul>` : '<p>No matching projects.</p>'}`);
 }

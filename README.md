@@ -7,8 +7,9 @@ Edit ideas, abandon them while retaining their contents, and restore them to new
 Browse all ideas to combine status filters with title search. Create projects directly with an optional description and repository URL, defaulting
 to experimenting or selecting developing. Edit project details and clear optional
 values. Home groups projects by stage, most recently updated first. Repository links
-are manual references; the app never contacts GitHub. Project lifecycle actions and
-features follow in later tickets. Records have no permanent deletion action.
+are manual references; the app never contacts GitHub. Move projects between experimenting, developing, and abandoned; restore them to either
+active stage. Browse all projects to combine status filters with title search, including
+abandoned projects. Metadata remains editable in every status. Features follow in later tickets. Records have no permanent deletion action.
 
 ## Run with Docker
 
@@ -112,7 +113,7 @@ npm run test:browser -- --project=desktop -g 'missing and whitespace'
 The Docker test builds the image, publishes an isolated host port, captures an
 idea through the browser, edits and abandons it, reloads, restarts, replaces the container with the same
 mount, then stops it, copies the directory to a backup, restores that backup to
-a separate mount, and verifies the idea and an edited project, including its repository link, status, and timestamps through the browser.
+a separate mount, and verifies the idea and abandoned and restored projects, including their repository links, statuses, and timestamps through the browser.
 Temporary containers, images, and directories are removed afterward. Failed
 tests retain Playwright traces in `test-results/`.
 

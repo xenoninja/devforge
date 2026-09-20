@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
 import { Projects } from './projects.js';
 import { Ideas } from './ideas.js';
-import { home, ideaDetail, ideaForm, ideaList, layout, projectForm, projectDetail } from './views.js';
+import { home, ideaDetail, ideaForm, ideaList, layout, projectForm, projectDetail, projectList } from './views.js';
 
 const ideas = new Ideas(process.env.DATA_DIR ?? './data');
 const projects = new Projects(process.env.DATA_DIR ?? './data');
@@ -20,6 +20,31 @@ const server = createServer(async (request, response) => {
       response.end(stylesheet);
     } else if (request.method === 'GET' && path === '/') {
       response.end(home(ideas.list('new'), projects.list('experimenting'), projects.list('developing')));
+    } else if (request.method === 'POST' && /^\/projects\/\d+\/status$/.test(path)) {
+      const id = Number(path.split('/')[2]);
+      if (!projects.get(id)) {
+        response.writeHead(404).end(layout('Project not found', '<h1>Project not found</h1>'));
+        return;
+      }
+      let body = '';
+      for await (const chunk of request) {
+        body += chunk.toString();
+        if (Buffer.byteLength(body) > 1_048_576) {
+          response.writeHead(413).end(layout('Too much text', '<h1>Too much text</h1>'));
+          return;
+        }
+      }
+      const status = new URLSearchParams(body).get('status');
+      if (status !== 'experimenting' && status !== 'developing' && status !== 'abandoned') {
+        response.writeHead(422).end(layout('Invalid status', `<h1>Choose experimenting, developing, or abandoned.</h1><a href="/projects/${id}">View project</a>`));
+      } else if (!projects.changeStatus(id, status)) {
+        response.writeHead(409).end(layout('Status already changed', `<h1>Status already changed</h1><a href="/projects/${id}">View project</a>`));
+      } else response.writeHead(303, { Location: `/projects/${id}` }).end();
+    } else if (request.method === 'GET' && path === '/projects') {
+      const requestedStatus = url.searchParams.get('status');
+      const status = requestedStatus === 'experimenting' || requestedStatus === 'developing' || requestedStatus === 'abandoned' ? requestedStatus : 'all';
+      const search = url.searchParams.get('search') ?? '';
+      response.end(projectList(projects.list(status, search), status, search));
     } else if (request.method === 'GET' && path === '/projects/new') {
       response.end(projectForm());
     } else if (request.method === 'GET' && /^\/projects\/\d+$/.test(path)) {
@@ -47,7 +72,7 @@ const server = createServer(async (request, response) => {
       const form = new URLSearchParams(body);
       const input = { title: (form.get('title') ?? '').trim(), description: form.get('description') ?? '', repository_url: (form.get('repository_url') ?? '').trim() };
       const status = existing?.status ?? form.get('status') ?? 'experimenting';
-      if (status !== 'experimenting' && status !== 'developing') {
+      if (status !== 'experimenting' && status !== 'developing' && !(existing && status === 'abandoned')) {
         response.writeHead(422).end(projectForm('Choose experimenting or developing.', input));
         return;
       }

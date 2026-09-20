@@ -7,10 +7,12 @@ export interface Project {
   title: string;
   description: string;
   repository_url: string;
-  status: 'experimenting' | 'developing';
+  status: 'experimenting' | 'developing' | 'abandoned';
   created_at: string;
   updated_at: string;
 }
+
+export type ProjectStatusFilter = 'all' | Project['status'];
 
 export type ProjectInput = Pick<Project, 'title' | 'description' | 'repository_url'>;
 
@@ -31,6 +33,27 @@ export class Projects {
         updated_at TEXT NOT NULL
       ) STRICT;
     `);
+    const version = this.database.prepare('PRAGMA user_version').get() as { user_version: number };
+    if (version.user_version < 2) {
+      // Widen the released constraint without changing project identities or metadata.
+      this.database.exec(`
+        BEGIN IMMEDIATE;
+        CREATE TABLE projects_migrated (
+          id INTEGER PRIMARY KEY,
+          title TEXT NOT NULL CHECK(length(trim(title)) > 0),
+          description TEXT NOT NULL DEFAULT '',
+          repository_url TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'experimenting' CHECK(status IN ('experimenting', 'developing', 'abandoned')),
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        ) STRICT;
+        INSERT INTO projects_migrated SELECT * FROM projects;
+        DROP TABLE projects;
+        ALTER TABLE projects_migrated RENAME TO projects;
+        PRAGMA user_version = 2;
+        COMMIT;
+      `);
+    }
   }
 
   create(input: ProjectInput, status: Project['status']): number {
@@ -46,9 +69,16 @@ export class Projects {
       .run(input.title, input.description, input.repository_url, new Date().toISOString(), id);
   }
 
-  list(status: Project['status']): Project[] {
-    return this.database.prepare('SELECT * FROM projects WHERE status = ? ORDER BY updated_at DESC, id DESC')
-      .all(status) as unknown as Project[];
+  changeStatus(id: number, status: Project['status']): boolean {
+    return this.database.prepare('UPDATE projects SET status = ?, updated_at = ? WHERE id = ? AND status != ?')
+      .run(status, new Date().toISOString(), id, status).changes === 1;
+  }
+
+  list(status: ProjectStatusFilter = 'all', search = ''): Project[] {
+    return this.database.prepare(`
+      SELECT * FROM projects WHERE (? = 'all' OR status = ?)
+        AND instr(lower(title), lower(?)) > 0 ORDER BY updated_at DESC, id DESC
+    `).all(status, status, search) as unknown as Project[];
   }
 
   get(id: number): Project | undefined {

@@ -53,6 +53,15 @@ test('ideas and projects survive container restart, replacement, and a stopped-d
     return page.locator('time').evaluateAll(elements => elements.map(el => el.getAttribute('datetime')));
   }
 
+  async function verifyAbandonedProject() {
+    await page.goto(`${url}/projects?status=abandoned&search=Archived`);
+    await page.getByRole('link', { name: 'Archived project', exact: true }).click();
+    await expect(page.locator('.badge')).toHaveText('Abandoned');
+    await expect(page.getByText('Archived notes.', { exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'https://github.com/example/deleted' })).toBeVisible();
+    return page.locator('time').evaluateAll(elements => elements.map(el => el.getAttribute('datetime')));
+  }
+
   try {
     await docker('build', '-t', image, '.');
     await start(data);
@@ -78,18 +87,32 @@ test('ideas and projects survive container restart, replacement, and a stopped-d
     await page.getByLabel('Description').fill('Edited project notes.');
     await page.getByLabel('Repository URL').fill('https://github.com/example/retained');
     await page.getByRole('button', { name: 'Save project' }).click();
+    await page.getByLabel('Change status').selectOption('abandoned');
+    await page.getByRole('button', { name: 'Save status' }).click();
+    await page.getByLabel('Change status').selectOption('developing');
+    await page.getByRole('button', { name: 'Save status' }).click();
     const projectTimes = await verifyProject();
+    await page.goto(`${url}/projects/new`);
+    await page.getByLabel('Title', { exact: true }).fill('Archived project');
+    await page.getByLabel('Description').fill('Archived notes.');
+    await page.getByLabel('Repository URL').fill('https://github.com/example/deleted');
+    await page.getByRole('button', { name: 'Save project' }).click();
+    await page.getByLabel('Change status').selectOption('abandoned');
+    await page.getByRole('button', { name: 'Save status' }).click();
+    const abandonedTimes = await verifyAbandonedProject();
 
     await docker('restart', container);
     await ready();
     expect(await verifyIdea()).toEqual(times);
     expect(await verifyProject()).toEqual(projectTimes);
+    expect(await verifyAbandonedProject()).toEqual(abandonedTimes);
 
     await docker('stop', container);
     await docker('rm', container);
     await start(data);
     expect(await verifyIdea()).toEqual(times);
     expect(await verifyProject()).toEqual(projectTimes);
+    expect(await verifyAbandonedProject()).toEqual(abandonedTimes);
 
     await docker('stop', container);
     await cp(data, backup, { recursive: true });
@@ -98,6 +121,7 @@ test('ideas and projects survive container restart, replacement, and a stopped-d
     await start(restored);
     expect(await verifyIdea()).toEqual(times);
     expect(await verifyProject()).toEqual(projectTimes);
+    expect(await verifyAbandonedProject()).toEqual(abandonedTimes);
   } finally {
     await docker('rm', '-f', container).catch(() => {});
     await docker('image', 'rm', image).catch(() => {});
