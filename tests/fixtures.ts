@@ -4,10 +4,29 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { once } from 'node:events';
+import { DatabaseSync } from 'node:sqlite';
 
-export const test = base.extend<{ appURL: string }>({
-  appURL: async ({}, use) => {
+export const test = base.extend<{ appURL: string; captureOnlyData: boolean }>({
+  captureOnlyData: [false, { option: true }],
+  appURL: async ({ captureOnlyData }, use) => {
     const directory = await mkdtemp(join(tmpdir(), 'devforge-browser-'));
+    if (captureOnlyData) {
+      // The released capture-only schema is input to the upgrade; assertions remain in the browser.
+      const database = new DatabaseSync(join(directory, 'devforge.sqlite'));
+      database.exec(`
+        CREATE TABLE ideas (
+          id INTEGER PRIMARY KEY,
+          title TEXT NOT NULL CHECK(length(trim(title)) > 0),
+          description TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'new' CHECK(status = 'new'),
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        ) STRICT;
+        INSERT INTO ideas VALUES (7, 'Existing idea', 'Original notes', 'new',
+          '2026-09-01T00:00:00.000Z', '2026-09-02T00:00:00.000Z');
+      `);
+      database.close();
+    }
     const child = spawn(process.execPath, ['dist/server.js'], {
       env: { ...process.env, DATA_DIR: directory, PORT: '0' },
       stdio: ['ignore', 'pipe', 'pipe'],

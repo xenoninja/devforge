@@ -3,7 +3,8 @@
 A local, single-owner dashboard for ideas. Capture a required title and optional
 plain-text description, then find new ideas on home, most recently updated first.
 Creation and last-update times are recorded automatically and displayed in UTC.
-This first slice covers capture and viewing; editing, lifecycle, projects, and
+Edit ideas, abandon them while retaining their contents, and restore them to new.
+Browse all ideas to combine status filters with title search. Projects and
 features follow in later tickets. Records have no permanent deletion action.
 
 ## Run with Docker
@@ -93,7 +94,7 @@ touch input, rather than a physical phone or Safari.
 npm ci
 npx playwright install chromium
 npm run typecheck
-npm run test:browser             # capture, validation, text, ordering, layouts
+npm run test:browser             # capture, editing, lifecycle, discovery, layouts
 npm run test:docker              # Docker daemon required
 npm test                        # full suite, including Docker
 ```
@@ -106,7 +107,7 @@ npm run test:browser -- --project=desktop -g 'missing and whitespace'
 ```
 
 The Docker test builds the image, publishes an isolated host port, captures an
-idea through the browser, reloads, restarts, replaces the container with the same
+idea through the browser, edits and abandons it, reloads, restarts, replaces the container with the same
 mount, then stops it, copies the directory to a backup, restores that backup to
 a separate mount, and verifies the record and timestamps through the browser.
 Temporary containers, images, and directories are removed afterward. Failed

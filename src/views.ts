@@ -1,4 +1,4 @@
-import type { Idea } from './ideas.js';
+import type { Idea, IdeaStatusFilter } from './ideas.js';
 
 function escape(text: string): string {
   return text.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!);
@@ -16,25 +16,44 @@ function time(value: string): string {
   return `<time datetime="${escape(value)}">${escape(new Date(value).toLocaleString('en-GB', { timeZone: 'UTC', dateStyle: 'medium', timeStyle: 'short' }))} UTC</time>`;
 }
 
-export function home(ideas: Idea[]): string {
-  return layout('Ideas', `<div class="page-heading"><div><p class="eyebrow">Your workspace</p><h1>Ideas</h1>
-    <p class="muted">Small sparks. Possibilities worth keeping.</p></div><a class="button" href="/ideas/new">Add idea</a></div>
-    <section aria-labelledby="new-ideas"><div class="section-heading"><h2 id="new-ideas">New ideas <span class="count">${ideas.length}</span></h2><span class="muted">Recently updated first</span></div>
-    ${ideas.length ? `<ul class="ideas">${ideas.map(idea => `<li><a href="/ideas/${idea.id}">${escape(idea.title)}</a><span class="badge">New</span><p class="muted">Updated ${time(idea.updated_at)}</p></li>`).join('')}</ul>` : '<div class="empty"><div class="spark" aria-hidden="true">✳</div><h3>No ideas yet</h3><p>Have something in mind? Add your first idea and give it a home.</p></div>'}</section>`);
+function ideaCards(ideas: Idea[]): string {
+  return `<ul class="ideas">${ideas.map(idea => `<li><a href="/ideas/${idea.id}">${escape(idea.title)}</a><span class="badge">${idea.status === 'new' ? 'New' : 'Abandoned'}</span><p class="muted">Updated ${time(idea.updated_at)}</p></li>`).join('')}</ul>`;
 }
 
-export function ideaForm(error = '', title = '', description = ''): string {
-  return layout('Add idea', `<a class="back" href="/">← All ideas</a><p class="eyebrow">Make a little room</p><h1>Add an idea</h1><p class="muted">A title is all you need. The details can come later.</p>
-    <form method="post" action="/ideas">
+export function home(ideas: Idea[]): string {
+  return layout('Ideas', `<div class="page-heading"><div><p class="eyebrow">Your workspace</p><h1>Ideas</h1>
+    <p class="muted">Small sparks. Possibilities worth keeping.</p><a href="/ideas">Browse all ideas</a></div><a class="button" href="/ideas/new">Add idea</a></div>
+    <section aria-labelledby="new-ideas"><div class="section-heading"><h2 id="new-ideas">New ideas <span class="count">${ideas.length}</span></h2><span class="muted">Recently updated first</span></div>
+    ${ideas.length ? ideaCards(ideas) : '<div class="empty"><div class="spark" aria-hidden="true">✳</div><h3>No ideas yet</h3><p>Have something in mind? Add your first idea and give it a home.</p></div>'}</section>`);
+}
+
+export function ideaForm(error = '', title = '', description = '', id?: number): string {
+  const editing = id !== undefined;
+  return layout(editing ? 'Edit idea' : 'Add idea', `<a class="back" href="/ideas">← All ideas</a><p class="eyebrow">Make a little room</p><h1>${editing ? 'Edit idea' : 'Add an idea'}</h1><p class="muted">A title is all you need. The details can come later.</p>
+    <form method="post" action="${editing ? `/ideas/${id}/edit` : '/ideas'}">
     ${error ? `<p class="error" id="title-error" role="alert">${escape(error)}</p>` : ''}
     <label for="title">Title</label><input id="title" name="title" required value="${escape(title)}" ${error ? 'aria-invalid="true" aria-describedby="title-error"' : ''}>
     <label for="description">Description <span class="muted">(optional)</span></label><p class="hint" id="description-hint">Keep a few notes in plain text.</p>
     <textarea id="description" name="description" rows="7" aria-describedby="description-hint">\n${escape(description)}</textarea>
-    <div class="actions"><button type="submit">Save idea</button><a href="/">Cancel</a></div></form>`);
+    <div class="actions"><button type="submit">Save idea</button><a href="${editing ? `/ideas/${id}` : '/'}">Cancel</a></div></form>`);
 }
 
 export function ideaDetail(idea: Idea): string {
-  return layout(idea.title, `<a class="back" href="/">← All ideas</a><p class="eyebrow">Idea</p><h1>${escape(idea.title)}</h1><span class="badge">New</span>
+  return layout(idea.title, `<a class="back" href="/ideas">← All ideas</a><p class="eyebrow">Idea</p><h1>${escape(idea.title)}</h1><span class="badge">${idea.status === 'new' ? 'New' : 'Abandoned'}</span>
+    <div class="actions"><a class="button" href="/ideas/${idea.id}/edit">Edit idea</a></div>
+    <form method="post" action="/ideas/${idea.id}/${idea.status === 'new' ? 'abandon' : 'restore'}"><button type="submit">${idea.status === 'new' ? 'Abandon idea' : 'Restore idea'}</button></form>
     <section class="detail"><h2>Description</h2>${idea.description ? `<p class="description">${escape(idea.description)}</p>` : '<p class="muted">No description yet.</p>'}</section>
     <dl class="timestamps"><div><dt>Created</dt><dd>${time(idea.created_at)}</dd></div><div><dt>Last updated</dt><dd>${time(idea.updated_at)}</dd></div></dl>`);
+}
+
+export function ideaList(ideas: Idea[], status: IdeaStatusFilter, search: string): string {
+  return layout('All ideas', `<a class="back" href="/">← Home</a>
+    <div class="page-heading"><h1>All ideas</h1><a class="button" href="/ideas/new">Add idea</a></div>
+    <form method="get" action="/ideas">
+      <label for="status">Status</label><select id="status" name="status">
+      ${['all', 'new', 'abandoned'].map(value => `<option value="${value}" ${value === status ? 'selected' : ''}>${value === 'all' ? 'All statuses' : value === 'new' ? 'New' : 'Abandoned'}</option>`).join('')}</select>
+      <label for="search">Search titles</label><input id="search" name="search" type="search" value="${escape(search)}">
+      <div class="actions"><button type="submit">Apply filters</button><a href="/ideas">Clear filters</a></div>
+    </form><p class="muted">Recently updated first</p>
+    ${ideas.length ? ideaCards(ideas) : '<p>No matching ideas.</p>'}`);
 }

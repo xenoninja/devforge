@@ -36,11 +36,11 @@ test('ideas survive container restart, replacement, and a stopped-directory back
   }
 
   async function verifyIdea() {
-    await page.goto(url);
-    await page.getByRole('link', { name: 'Keep this idea' }).click();
-    await expect(page.getByRole('heading', { name: 'Keep this idea' })).toBeVisible();
-    await expect(page.getByText('Saved across container replacement.')).toBeVisible();
-    await expect(page.getByText('New', { exact: true })).toBeVisible();
+    await page.goto(`${url}/ideas`);
+    await page.getByRole('link', { name: 'Keep this refined idea' }).click();
+    await expect(page.getByRole('heading', { name: 'Keep this refined idea' })).toBeVisible();
+    await expect(page.getByText('Edited notes survive container replacement.')).toBeVisible();
+    await expect(page.getByText('Abandoned', { exact: true })).toBeVisible();
     return page.locator('time').evaluateAll(elements => elements.map(el => el.getAttribute('datetime')));
   }
 
@@ -53,6 +53,11 @@ test('ideas survive container restart, replacement, and a stopped-directory back
     await page.getByLabel('Description').fill('Saved across container replacement.');
     await page.getByRole('button', { name: 'Save idea' }).click();
     await expect(page.getByRole('heading', { name: 'Keep this idea' })).toBeVisible();
+    await page.getByRole('link', { name: 'Edit idea' }).click();
+    await page.getByLabel('Title', { exact: true }).fill('Keep this refined idea');
+    await page.getByLabel('Description').fill('Edited notes survive container replacement.');
+    await page.getByRole('button', { name: 'Save idea' }).click();
+    await page.getByRole('button', { name: 'Abandon idea' }).click();
     await page.reload();
     const times = await verifyIdea();
 
