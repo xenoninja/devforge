@@ -1,0 +1,23 @@
+{
+  "name": "devforge",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "build:watch": "tsc -p tsconfig.build.json --watch",
+    "typecheck": "tsc --noEmit",
+    "dev": "npm run build && node --watch dist/server.js",
+    "start": "node dist/server.js",
+    "test": "npm run build && playwright test",
+    "test:browser": "npm run build && playwright test tests/ideas.spec.ts",
+    "test:docker": "npm run build && playwright test tests/docker.spec.ts --project=desktop"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "24.13.6",
+    "typescript": "7.0.2"
+  }
+}
