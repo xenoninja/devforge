@@ -50,3 +50,6 @@ footer { font-size: 12px; }
   .timestamps { flex-direction: column; gap: 16px; }
   .empty { padding: 36px 18px; }
 }
+.project-section { margin-top: 36px; }
+.repository { overflow-wrap: anywhere; }
+.actions { flex-wrap: wrap; }

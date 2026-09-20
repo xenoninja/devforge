@@ -1,3 +1,4 @@
+import type { Project, ProjectInput } from './projects.js';
 import type { Idea, IdeaStatusFilter } from './ideas.js';
 
 function escape(text: string): string {
@@ -20,11 +21,11 @@ function ideaCards(ideas: Idea[]): string {
   return `<ul class="ideas">${ideas.map(idea => `<li><a href="/ideas/${idea.id}">${escape(idea.title)}</a><span class="badge">${idea.status === 'new' ? 'New' : 'Abandoned'}</span><p class="muted">Updated ${time(idea.updated_at)}</p></li>`).join('')}</ul>`;
 }
 
-export function home(ideas: Idea[]): string {
-  return layout('Ideas', `<div class="page-heading"><div><p class="eyebrow">Your workspace</p><h1>Ideas</h1>
-    <p class="muted">Small sparks. Possibilities worth keeping.</p><a href="/ideas">Browse all ideas</a></div><a class="button" href="/ideas/new">Add idea</a></div>
+export function home(ideas: Idea[], experimenting: Project[], developing: Project[]): string {
+  return layout('Home', `<div class="page-heading"><div><p class="eyebrow">Your workspace</p><h1>Ideas &amp; projects</h1>
+    <p class="muted">Small sparks. Possibilities worth keeping.</p><a href="/ideas">Browse all ideas</a></div><div class="actions"><a class="button" href="/ideas/new">Add idea</a><a class="button" href="/projects/new">Add project</a></div></div>
     <section aria-labelledby="new-ideas"><div class="section-heading"><h2 id="new-ideas">New ideas <span class="count">${ideas.length}</span></h2><span class="muted">Recently updated first</span></div>
-    ${ideas.length ? ideaCards(ideas) : '<div class="empty"><div class="spark" aria-hidden="true">✳</div><h3>No ideas yet</h3><p>Have something in mind? Add your first idea and give it a home.</p></div>'}</section>`);
+    ${ideas.length ? ideaCards(ideas) : '<div class="empty"><div class="spark" aria-hidden="true">✳</div><h3>No ideas yet</h3><p>Have something in mind? Add your first idea and give it a home.</p></div>'}</section>${projectSection(experimenting, 'experimenting')}${projectSection(developing, 'developing')}`);
 }
 
 export function ideaForm(error = '', title = '', description = '', id?: number): string {
@@ -56,4 +57,31 @@ export function ideaList(ideas: Idea[], status: IdeaStatusFilter, search: string
       <div class="actions"><button type="submit">Apply filters</button><a href="/ideas">Clear filters</a></div>
     </form><p class="muted">Recently updated first</p>
     ${ideas.length ? ideaCards(ideas) : '<p>No matching ideas.</p>'}`);
+}
+
+function projectSection(projects: Project[], status: Project['status']): string {
+  const name = status === 'experimenting' ? 'Experimenting' : 'Developing';
+  return `<section class="project-section" aria-labelledby="${status}-projects"><div class="section-heading"><h2 id="${status}-projects">${name} projects <span class="count">${projects.length}</span></h2><span class="muted">Recently updated first</span></div>
+    ${projects.length ? `<ul class="ideas">${projects.map(project => `<li><a href="/projects/${project.id}">${escape(project.title)}</a><p class="muted">Updated ${time(project.updated_at)}</p></li>`).join('')}</ul>` : `<p>No ${status} projects yet.</p>`}</section>`;
+}
+
+export function projectForm(error = '', input: ProjectInput = { title: '', description: '', repository_url: '' }, status: Project['status'] = 'experimenting', id?: number): string {
+  const editing = id !== undefined;
+  return layout(editing ? 'Edit project' : 'Add project', `<a class="back" href="/">Home</a><h1>${editing ? 'Edit project' : 'Add a project'}</h1>
+    <form method="post" action="${editing ? `/projects/${id}/edit` : '/projects'}">
+    ${error ? `<p class="error" role="alert">${escape(error)}</p>` : ''}
+    <label for="title">Title</label><input id="title" name="title" required value="${escape(input.title)}">
+    <label for="description">Description <span class="muted">(optional, plain text)</span></label><textarea id="description" name="description" rows="7">\n${escape(input.description)}</textarea>
+    <label for="repository-url">Repository URL <span class="muted">(optional)</span></label><input id="repository-url" name="repository_url" type="url" value="${escape(input.repository_url)}" aria-describedby="repository-hint">
+    <p class="hint" id="repository-hint">A manually maintained reference. No GitHub connection is needed.</p>
+    ${editing ? '' : `<label for="status">Status</label><select id="status" name="status" aria-describedby="status-hint"><option value="experimenting" ${status === 'experimenting' ? 'selected' : ''}>Experimenting</option><option value="developing" ${status === 'developing' ? 'selected' : ''}>Developing</option></select><p class="hint" id="status-hint">Experimenting verifies an MVP. Developing means an ongoing project you intend to maintain, including between coding sessions.</p>`}
+    <div class="actions"><button type="submit">Save project</button><a href="${editing ? `/projects/${id}` : '/'}">Cancel</a></div></form>`);
+}
+
+export function projectDetail(project: Project): string {
+  return layout(project.title, `<a class="back" href="/">Home</a><p class="eyebrow">Project</p><h1>${escape(project.title)}</h1><span class="badge">${project.status === 'experimenting' ? 'Experimenting' : 'Developing'}</span>
+    <div class="actions"><a class="button" href="/projects/${project.id}/edit">Edit project</a></div>
+    <section class="detail"><h2>Description</h2>${project.description ? `<p class="description">${escape(project.description)}</p>` : '<p class="muted">No description yet.</p>'}</section>
+    <section class="detail"><h2>Repository</h2>${project.repository_url ? `<a class="repository" href="${escape(project.repository_url)}" rel="noreferrer">${escape(project.repository_url)}</a>` : '<p class="muted">No repository link yet.</p>'}</section>
+    <dl class="timestamps"><div><dt>Created</dt><dd>${time(project.created_at)}</dd></div><div><dt>Last updated</dt><dd>${time(project.updated_at)}</dd></div></dl>`);
 }

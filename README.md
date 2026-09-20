@@ -1,10 +1,13 @@
 # Devforge
 
-A local, single-owner dashboard for ideas. Capture a required title and optional
+A local, single-owner dashboard for ideas and projects. Capture a required title and optional
 plain-text description, then find new ideas on home, most recently updated first.
 Creation and last-update times are recorded automatically and displayed in UTC.
 Edit ideas, abandon them while retaining their contents, and restore them to new.
-Browse all ideas to combine status filters with title search. Projects and
+Browse all ideas to combine status filters with title search. Create projects directly with an optional description and repository URL, defaulting
+to experimenting or selecting developing. Edit project details and clear optional
+values. Home groups projects by stage, most recently updated first. Repository links
+are manual references; the app never contacts GitHub. Project lifecycle actions and
 features follow in later tickets. Records have no permanent deletion action.
 
 ## Run with Docker
@@ -56,7 +59,7 @@ cp -R backups/ideas-2026-09-20 restored-data
 DATA_DIR=./restored-data PORT=3001 docker compose -p devforge-restored up --build -d
 ```
 
-Open <http://localhost:3001> and check the saved ideas. Stop this restored instance
+Open <http://localhost:3001> and check the saved ideas and projects. Stop this restored instance
 with `DATA_DIR=./restored-data PORT=3001 docker compose -p devforge-restored down`.
 If using a custom directory, substitute that directory for `data` in the backup
 command and pass its `DATA_DIR` when stopping and starting the original instance.
@@ -109,7 +112,7 @@ npm run test:browser -- --project=desktop -g 'missing and whitespace'
 The Docker test builds the image, publishes an isolated host port, captures an
 idea through the browser, edits and abandons it, reloads, restarts, replaces the container with the same
 mount, then stops it, copies the directory to a backup, restores that backup to
-a separate mount, and verifies the record and timestamps through the browser.
+a separate mount, and verifies the idea and an edited project, including its repository link, status, and timestamps through the browser.
 Temporary containers, images, and directories are removed afterward. Failed
 tests retain Playwright traces in `test-results/`.
 

@@ -1,9 +1,11 @@
 import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
+import { Projects } from './projects.js';
 import { Ideas } from './ideas.js';
-import { home, ideaDetail, ideaForm, ideaList, layout } from './views.js';
+import { home, ideaDetail, ideaForm, ideaList, layout, projectForm, projectDetail } from './views.js';
 
 const ideas = new Ideas(process.env.DATA_DIR ?? './data');
+const projects = new Projects(process.env.DATA_DIR ?? './data');
 const stylesheet = readFileSync(new URL('../public/style.css', import.meta.url));
 const server = createServer(async (request, response) => {
   response.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -17,7 +19,53 @@ const server = createServer(async (request, response) => {
       response.setHeader('Content-Type', 'text/css; charset=utf-8');
       response.end(stylesheet);
     } else if (request.method === 'GET' && path === '/') {
-      response.end(home(ideas.list('new')));
+      response.end(home(ideas.list('new'), projects.list('experimenting'), projects.list('developing')));
+    } else if (request.method === 'GET' && path === '/projects/new') {
+      response.end(projectForm());
+    } else if (request.method === 'GET' && /^\/projects\/\d+$/.test(path)) {
+      const project = projects.get(Number(path.split('/')[2]));
+      if (project) response.end(projectDetail(project));
+      else response.writeHead(404).end(layout('Project not found', '<h1>Project not found</h1><a href="/">Home</a>'));
+    } else if (request.method === 'GET' && /^\/projects\/\d+\/edit$/.test(path)) {
+      const project = projects.get(Number(path.split('/')[2]));
+      if (project) response.end(projectForm('', project, project.status, project.id));
+      else response.writeHead(404).end(layout('Project not found', '<h1>Project not found</h1><a href="/">Home</a>'));
+    } else if (request.method === 'POST' && (path === '/projects' || /^\/projects\/\d+\/edit$/.test(path))) {
+      const existing = path === '/projects' ? undefined : projects.get(Number(path.split('/')[2]));
+      if (path !== '/projects' && !existing) {
+        response.writeHead(404).end(layout('Project not found', '<h1>Project not found</h1><a href="/">Home</a>'));
+        return;
+      }
+      let body = '';
+      for await (const chunk of request) {
+        body += chunk.toString();
+        if (Buffer.byteLength(body) > 1_048_576) {
+          response.writeHead(413).end(layout('Too much text', '<h1>Too much text</h1><a href="/">Home</a>'));
+          return;
+        }
+      }
+      const form = new URLSearchParams(body);
+      const input = { title: (form.get('title') ?? '').trim(), description: form.get('description') ?? '', repository_url: (form.get('repository_url') ?? '').trim() };
+      const status = existing?.status ?? form.get('status') ?? 'experimenting';
+      if (status !== 'experimenting' && status !== 'developing') {
+        response.writeHead(422).end(projectForm('Choose experimenting or developing.', input));
+        return;
+      }
+      if (!input.title) {
+        response.writeHead(422).end(projectForm('Give your project a title.', input, status, existing?.id));
+        return;
+      }
+      if (input.repository_url) {
+        let valid = false;
+        try { valid = ['http:', 'https:'].includes(new URL(input.repository_url).protocol); } catch {}
+        if (!valid) {
+          response.writeHead(422).end(projectForm('Enter an HTTP or HTTPS repository URL.', input, status, existing?.id));
+          return;
+        }
+      }
+      const id = existing?.id ?? projects.create(input, status);
+      if (existing) projects.edit(id, input);
+      response.writeHead(303, { Location: `/projects/${id}` }).end();
     } else if (request.method === 'GET' && path === '/ideas') {
       const requestedStatus = url.searchParams.get('status');
       const status = requestedStatus === 'new' || requestedStatus === 'abandoned' ? requestedStatus : 'all';
@@ -77,5 +125,5 @@ server.listen(Number(process.env.PORT ?? 3000), '0.0.0.0', () => {
   if (address && typeof address !== 'string') console.log(`Listening on http://0.0.0.0:${address.port}`);
 });
 for (const signal of ['SIGTERM', 'SIGINT']) {
-  process.on(signal, () => server.close(() => ideas.close()));
+  process.on(signal, () => server.close(() => { ideas.close(); projects.close(); }));
 }

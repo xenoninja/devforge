@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto';
 const exec = promisify(execFile);
 const docker = (...args: string[]) => exec('docker', args, { timeout: 180_000, maxBuffer: 4 * 1024 * 1024 });
 
-test('ideas survive container restart, replacement, and a stopped-directory backup restored to a separate mount', async ({ page }) => {
+test('ideas and projects survive container restart, replacement, and a stopped-directory backup restored to a separate mount', async ({ page }) => {
   test.setTimeout(240_000);
   const id = randomUUID();
   const image = `devforge-test:${id}`;
@@ -44,6 +44,15 @@ test('ideas survive container restart, replacement, and a stopped-directory back
     return page.locator('time').evaluateAll(elements => elements.map(el => el.getAttribute('datetime')));
   }
 
+  async function verifyProject() {
+    await page.goto(url);
+    await page.getByRole('link', { name: 'Maintained project', exact: true }).click();
+    await expect(page.getByText('Developing', { exact: true })).toBeVisible();
+    await expect(page.getByText('Edited project notes.')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'https://github.com/example/retained' })).toHaveAttribute('href', 'https://github.com/example/retained');
+    return page.locator('time').evaluateAll(elements => elements.map(el => el.getAttribute('datetime')));
+  }
+
   try {
     await docker('build', '-t', image, '.');
     await start(data);
@@ -60,15 +69,27 @@ test('ideas survive container restart, replacement, and a stopped-directory back
     await page.getByRole('button', { name: 'Abandon idea' }).click();
     await page.reload();
     const times = await verifyIdea();
+    await page.goto(`${url}/projects/new`);
+    await page.getByLabel('Title', { exact: true }).fill('Original project');
+    await page.getByLabel('Status', { exact: true }).selectOption('developing');
+    await page.getByRole('button', { name: 'Save project' }).click();
+    await page.getByRole('link', { name: 'Edit project' }).click();
+    await page.getByLabel('Title', { exact: true }).fill('Maintained project');
+    await page.getByLabel('Description').fill('Edited project notes.');
+    await page.getByLabel('Repository URL').fill('https://github.com/example/retained');
+    await page.getByRole('button', { name: 'Save project' }).click();
+    const projectTimes = await verifyProject();
 
     await docker('restart', container);
     await ready();
     expect(await verifyIdea()).toEqual(times);
+    expect(await verifyProject()).toEqual(projectTimes);
 
     await docker('stop', container);
     await docker('rm', container);
     await start(data);
     expect(await verifyIdea()).toEqual(times);
+    expect(await verifyProject()).toEqual(projectTimes);
 
     await docker('stop', container);
     await cp(data, backup, { recursive: true });
@@ -76,6 +97,7 @@ test('ideas survive container restart, replacement, and a stopped-directory back
     await docker('rm', container);
     await start(restored);
     expect(await verifyIdea()).toEqual(times);
+    expect(await verifyProject()).toEqual(projectTimes);
   } finally {
     await docker('rm', '-f', container).catch(() => {});
     await docker('image', 'rm', image).catch(() => {});
