@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { Ideas } from './ideas.js';
 
 export interface Project {
   id: number;
@@ -54,6 +55,7 @@ export class Projects {
         COMMIT;
       `);
     }
+    Ideas.migratePromotion(this.database);
   }
 
   create(input: ProjectInput, status: Project['status']): number {

@@ -62,6 +62,18 @@ test('ideas and projects survive container restart, replacement, and a stopped-d
     return page.locator('time').evaluateAll(elements => elements.map(el => el.getAttribute('datetime')));
   }
 
+  async function verifyPromotion() {
+    await page.goto(`${url}/ideas?status=promoted&search=Promoted`);
+    await page.getByRole('link', { name: 'Promoted origin', exact: true }).click();
+    await expect(page.getByText('Promoted', { exact: true })).toBeVisible();
+    await expect(page.getByText('Idea notes after promotion.')).toBeVisible();
+    await page.getByRole('link', { name: 'Promoted project' }).click();
+    await expect(page.getByRole('heading', { name: 'Promoted project' })).toBeVisible();
+    await expect(page.getByText('Developing', { exact: true })).toBeVisible();
+    await expect(page.getByText('Project notes after promotion.')).toBeVisible();
+    return page.locator('time').evaluateAll(elements => elements.map(el => el.getAttribute('datetime')));
+  }
+
   try {
     await docker('build', '-t', image, '.');
     await start(data);
@@ -100,12 +112,31 @@ test('ideas and projects survive container restart, replacement, and a stopped-d
     await page.getByLabel('Change status').selectOption('abandoned');
     await page.getByRole('button', { name: 'Save status' }).click();
     const abandonedTimes = await verifyAbandonedProject();
+    await page.goto(`${url}/ideas/new`);
+    await page.getByLabel('Title', { exact: true }).fill('Origin idea');
+    await page.getByLabel('Description').fill('Original idea notes.');
+    await page.getByRole('button', { name: 'Save idea' }).click();
+    await page.getByRole('link', { name: 'Promote idea' }).click();
+    await page.getByLabel('Status', { exact: true }).selectOption('developing');
+    await page.getByRole('button', { name: 'Save project' }).click();
+    await page.getByRole('link', { name: 'Edit project' }).click();
+    await page.getByLabel('Title', { exact: true }).fill('Promoted project');
+    await page.getByLabel('Description').fill('Project notes after promotion.');
+    await page.getByRole('button', { name: 'Save project' }).click();
+    await page.goto(`${url}/ideas?status=promoted`);
+    await page.getByRole('link', { name: 'Origin idea' }).click();
+    await page.getByRole('link', { name: 'Edit idea' }).click();
+    await page.getByLabel('Title', { exact: true }).fill('Promoted origin');
+    await page.getByLabel('Description').fill('Idea notes after promotion.');
+    await page.getByRole('button', { name: 'Save idea' }).click();
+    const promotionTimes = await verifyPromotion();
 
     await docker('restart', container);
     await ready();
     expect(await verifyIdea()).toEqual(times);
     expect(await verifyProject()).toEqual(projectTimes);
     expect(await verifyAbandonedProject()).toEqual(abandonedTimes);
+    expect(await verifyPromotion()).toEqual(promotionTimes);
 
     await docker('stop', container);
     await docker('rm', container);
@@ -113,6 +144,7 @@ test('ideas and projects survive container restart, replacement, and a stopped-d
     expect(await verifyIdea()).toEqual(times);
     expect(await verifyProject()).toEqual(projectTimes);
     expect(await verifyAbandonedProject()).toEqual(abandonedTimes);
+    expect(await verifyPromotion()).toEqual(promotionTimes);
 
     await docker('stop', container);
     await cp(data, backup, { recursive: true });
@@ -122,6 +154,7 @@ test('ideas and projects survive container restart, replacement, and a stopped-d
     expect(await verifyIdea()).toEqual(times);
     expect(await verifyProject()).toEqual(projectTimes);
     expect(await verifyAbandonedProject()).toEqual(abandonedTimes);
+    expect(await verifyPromotion()).toEqual(promotionTimes);
   } finally {
     await docker('rm', '-f', container).catch(() => {});
     await docker('image', 'rm', image).catch(() => {});

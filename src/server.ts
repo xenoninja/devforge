@@ -93,7 +93,7 @@ const server = createServer(async (request, response) => {
       response.writeHead(303, { Location: `/projects/${id}` }).end();
     } else if (request.method === 'GET' && path === '/ideas') {
       const requestedStatus = url.searchParams.get('status');
-      const status = requestedStatus === 'new' || requestedStatus === 'abandoned' ? requestedStatus : 'all';
+      const status = requestedStatus === 'new' || requestedStatus === 'abandoned' || requestedStatus === 'promoted' ? requestedStatus : 'all';
       const search = url.searchParams.get('search') ?? '';
       response.end(ideaList(ideas.list(status, search), status, search));
     } else if (request.method === 'POST' && /^\/ideas\/\d+\/(abandon|restore)$/.test(path)) {
@@ -104,6 +104,60 @@ const server = createServer(async (request, response) => {
       } else response.writeHead(303, { Location: `/ideas/${id}` }).end();
     } else if (request.method === 'GET' && path === '/ideas/new') {
       response.end(ideaForm());
+    } else if (request.method === 'GET' && /^\/ideas\/\d+\/promote$/.test(path)) {
+      const idea = ideas.get(Number(path.split('/')[2]));
+      if (!idea) response.writeHead(404).end(layout('Idea not found', '<h1>Idea not found</h1>'));
+      else if (idea.status !== 'new') {
+        response.writeHead(422).end(layout('Only new ideas can be promoted', `<h1>Only new ideas can be promoted</h1><a href="/ideas/${idea.id}">View idea</a>`));
+      } else {
+        response.end(projectForm('', { title: idea.title, description: idea.description, repository_url: '' }, 'experimenting', undefined, idea.id));
+      }
+    } else if (request.method === 'POST' && /^\/ideas\/\d+\/promote$/.test(path)) {
+      const id = Number(path.split('/')[2]);
+      const idea = ideas.get(id);
+      if (!idea) {
+        response.writeHead(404).end(layout('Idea not found', '<h1>Idea not found</h1>'));
+        return;
+      }
+      if (idea.status === 'promoted') {
+        response.writeHead(409).end(layout('Status already changed', `<h1>Status already changed</h1><a href="/ideas/${id}">View idea</a>`));
+        return;
+      }
+      if (idea.status !== 'new') {
+        response.writeHead(422).end(layout('Only new ideas can be promoted', `<h1>Only new ideas can be promoted</h1><a href="/ideas/${id}">View idea</a>`));
+        return;
+      }
+      let body = '';
+      for await (const chunk of request) {
+        body += chunk.toString();
+        if (Buffer.byteLength(body) > 1_048_576) {
+          response.writeHead(413).end(layout('Too much text', '<h1>Too much text</h1><a href="/">Home</a>'));
+          return;
+        }
+      }
+      const form = new URLSearchParams(body);
+      const input = { title: (form.get('title') ?? '').trim(), description: form.get('description') ?? '', repository_url: (form.get('repository_url') ?? '').trim() };
+      const status = form.get('status') ?? 'experimenting';
+      if (status !== 'experimenting' && status !== 'developing') {
+        response.writeHead(422).end(projectForm('Choose experimenting or developing.', input, 'experimenting', undefined, id));
+        return;
+      }
+      if (!input.title) {
+        response.writeHead(422).end(projectForm('Give your project a title.', input, status, undefined, id));
+        return;
+      }
+      if (input.repository_url) {
+        let valid = false;
+        try { valid = ['http:', 'https:'].includes(new URL(input.repository_url).protocol); } catch {}
+        if (!valid) {
+          response.writeHead(422).end(projectForm('Enter an HTTP or HTTPS repository URL.', input, status, undefined, id));
+          return;
+        }
+      }
+      const projectId = ideas.promote(id, input.title, input.description, input.repository_url, status);
+      if (projectId === undefined) {
+        response.writeHead(409).end(layout('Status already changed', `<h1>Status already changed</h1><a href="/ideas/${id}">View idea</a>`));
+      } else response.writeHead(303, { Location: `/projects/${projectId}` }).end();
     } else if (request.method === 'GET' && /^\/ideas\/\d+\/edit$/.test(path)) {
       const idea = ideas.get(Number(path.split('/')[2]));
       if (idea) response.end(ideaForm('', idea.title, idea.description, idea.id));
@@ -134,8 +188,10 @@ const server = createServer(async (request, response) => {
       response.writeHead(303, { Location: `/ideas/${id}` }).end();
     } else if (request.method === 'GET' && /^\/ideas\/\d+$/.test(path)) {
       const idea = ideas.get(Number(path.split('/')[2]));
-      if (idea) response.end(ideaDetail(idea));
-      else response.writeHead(404).end(layout('Idea not found', '<h1>Idea not found</h1><a href="/">All ideas</a>'));
+      if (idea) {
+        const project = idea.project_id != null ? projects.get(idea.project_id) : undefined;
+        response.end(ideaDetail(idea, project));
+      } else response.writeHead(404).end(layout('Idea not found', '<h1>Idea not found</h1><a href="/">All ideas</a>'));
     } else {
       response.writeHead(404).end(layout('Page not found', '<h1>Page not found</h1><a href="/">All ideas</a>'));
     }
