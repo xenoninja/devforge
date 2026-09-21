@@ -1,0 +1,8 @@
+services:
+  dashboard:
+    build: .
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      - "${DATA_DIR:-./data}:/data"
+    restart: unless-stopped
