@@ -1,5 +1,4 @@
-import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import type { DatabaseSync } from 'node:sqlite';
 
 export interface Feature {
   id: number;
@@ -27,48 +26,7 @@ export function isFeatureStatus(value: string | null): value is Feature['status'
 }
 
 export class Features {
-  private readonly database: DatabaseSync;
-
-  constructor(directory: string) {
-    this.database = new DatabaseSync(join(directory, 'devforge.sqlite'));
-    this.database.exec(`
-      PRAGMA foreign_keys = ON;
-      CREATE TABLE IF NOT EXISTS features (
-        id INTEGER PRIMARY KEY,
-        project_id INTEGER NOT NULL REFERENCES projects(id),
-        title TEXT NOT NULL CHECK(length(trim(title)) > 0),
-        description TEXT NOT NULL DEFAULT '',
-        issue_url TEXT NOT NULL DEFAULT '',
-        status TEXT NOT NULL DEFAULT 'new' CHECK(status = 'new'),
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      ) STRICT;
-      CREATE INDEX IF NOT EXISTS features_project_updated ON features(project_id, updated_at DESC, id DESC);
-    `);
-    const version = this.database.prepare('PRAGMA user_version').get() as { user_version: number };
-    if (version.user_version < 4) {
-      // Preserve released feature identities, project links and timestamps while widening statuses.
-      this.database.exec(`
-        BEGIN IMMEDIATE;
-        CREATE TABLE features_migrated (
-          id INTEGER PRIMARY KEY,
-          project_id INTEGER NOT NULL REFERENCES projects(id),
-          title TEXT NOT NULL CHECK(length(trim(title)) > 0),
-          description TEXT NOT NULL DEFAULT '',
-          issue_url TEXT NOT NULL DEFAULT '',
-          status TEXT NOT NULL DEFAULT 'new' CHECK(status IN ('new', 'developing', 'completed', 'abandoned')),
-          created_at TEXT NOT NULL,
-          updated_at TEXT NOT NULL
-        ) STRICT;
-        INSERT INTO features_migrated SELECT * FROM features;
-        DROP TABLE features;
-        ALTER TABLE features_migrated RENAME TO features;
-        CREATE INDEX features_project_updated ON features(project_id, updated_at DESC, id DESC);
-        PRAGMA user_version = 4;
-        COMMIT;
-      `);
-    }
-  }
+  constructor(private readonly database: DatabaseSync) {}
 
   changeStatus(projectId: number, id: number, status: Feature['status']): boolean {
     const feature = this.get(projectId, id);
@@ -104,6 +62,4 @@ export class Features {
     return this.database.prepare('SELECT * FROM features WHERE project_id = ? AND id = ?')
       .get(projectId, id) as unknown as Feature | undefined;
   }
-
-  close(): void { this.database.close(); }
 }

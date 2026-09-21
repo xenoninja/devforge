@@ -1,7 +1,4 @@
-import { mkdirSync } from 'node:fs';
-import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
-import { Ideas } from './ideas.js';
+import type { DatabaseSync } from 'node:sqlite';
 
 export interface Project {
   id: number;
@@ -18,45 +15,7 @@ export type ProjectStatusFilter = 'all' | Project['status'];
 export type ProjectInput = Pick<Project, 'title' | 'description' | 'repository_url'>;
 
 export class Projects {
-  private readonly database: DatabaseSync;
-
-  constructor(directory: string) {
-    mkdirSync(directory, { recursive: true });
-    this.database = new DatabaseSync(join(directory, 'devforge.sqlite'));
-    this.database.exec(`
-      CREATE TABLE IF NOT EXISTS projects (
-        id INTEGER PRIMARY KEY,
-        title TEXT NOT NULL CHECK(length(trim(title)) > 0),
-        description TEXT NOT NULL DEFAULT '',
-        repository_url TEXT NOT NULL DEFAULT '',
-        status TEXT NOT NULL DEFAULT 'experimenting' CHECK(status IN ('experimenting', 'developing')),
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      ) STRICT;
-    `);
-    const version = this.database.prepare('PRAGMA user_version').get() as { user_version: number };
-    if (version.user_version < 2) {
-      // Widen the released constraint without changing project identities or metadata.
-      this.database.exec(`
-        BEGIN IMMEDIATE;
-        CREATE TABLE projects_migrated (
-          id INTEGER PRIMARY KEY,
-          title TEXT NOT NULL CHECK(length(trim(title)) > 0),
-          description TEXT NOT NULL DEFAULT '',
-          repository_url TEXT NOT NULL DEFAULT '',
-          status TEXT NOT NULL DEFAULT 'experimenting' CHECK(status IN ('experimenting', 'developing', 'abandoned')),
-          created_at TEXT NOT NULL,
-          updated_at TEXT NOT NULL
-        ) STRICT;
-        INSERT INTO projects_migrated SELECT * FROM projects;
-        DROP TABLE projects;
-        ALTER TABLE projects_migrated RENAME TO projects;
-        PRAGMA user_version = 2;
-        COMMIT;
-      `);
-    }
-    Ideas.migratePromotion(this.database);
-  }
+  constructor(private readonly database: DatabaseSync) {}
 
   create(input: ProjectInput, status: Project['status']): number {
     const now = new Date().toISOString();
@@ -86,6 +45,4 @@ export class Projects {
   get(id: number): Project | undefined {
     return this.database.prepare('SELECT * FROM projects WHERE id = ?').get(id) as unknown as Project | undefined;
   }
-
-  close(): void { this.database.close(); }
 }

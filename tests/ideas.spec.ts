@@ -43,6 +43,22 @@ test('missing and whitespace-only titles are rejected without creating an idea',
   await expect(page.getByText('No ideas yet')).toBeVisible();
 });
 
+test('oversized submissions show an error without saving and allow a later valid submission', async ({ page, appURL }) => {
+  await page.goto(`${appURL}/ideas/new`);
+  await page.getByLabel('Title', { exact: true }).fill('Too much text');
+  await page.getByLabel('Description').fill('x'.repeat(1_048_576));
+  const response = page.waitForResponse(response => response.request().method() === 'POST');
+  await page.getByRole('button', { name: 'Save idea' }).click();
+  expect((await response).status()).toBe(413);
+  await expect(page.getByRole('heading', { name: 'Too much text' })).toBeVisible();
+  await page.getByRole('link', { name: 'Home', exact: true }).click();
+  await expect(page.getByText('No ideas yet')).toBeVisible();
+  await page.getByRole('link', { name: 'Add idea', exact: true }).click();
+  await page.getByLabel('Title', { exact: true }).fill('A smaller idea');
+  await page.getByRole('button', { name: 'Save idea' }).click();
+  await expect(page.getByRole('heading', { name: 'A smaller idea' })).toBeVisible();
+});
+
 test('descriptions stay plain text and home lists the most recently updated ideas first', async ({ page, appURL }) => {
   const title = 'A <small> idea & a "big" possibility';
   const description = '<script>document.body.textContent = "oops"</script>\n**Not markdown**\nA second line 🌱';

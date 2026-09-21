@@ -1,13 +1,16 @@
 import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
+import { openDatabase } from './database.js';
+import { FormTooLargeError, readForm, parseProjectInput, projectInputError, isHttpUrl } from './forms.js';
 import { Projects } from './projects.js';
 import { Features, isFeatureStatus } from './features.js';
 import { Ideas } from './ideas.js';
 import { featureForm, featureDetail, home, ideaDetail, ideaForm, ideaList, layout, projectForm, projectDetail, projectList } from './views.js';
 
-const ideas = new Ideas(process.env.DATA_DIR ?? './data');
-const projects = new Projects(process.env.DATA_DIR ?? './data');
-const features = new Features(process.env.DATA_DIR ?? './data');
+const database = openDatabase(process.env.DATA_DIR ?? './data');
+const ideas = new Ideas(database);
+const projects = new Projects(database);
+const features = new Features(database);
 const stylesheet = readFileSync(new URL('../public/style.css', import.meta.url));
 const server = createServer(async (request, response) => {
   response.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -29,15 +32,8 @@ const server = createServer(async (request, response) => {
         response.writeHead(404).end(layout('Feature not found', '<h1>Feature not found</h1>'));
         return;
       }
-      let body = '';
-      for await (const chunk of request) {
-        body += chunk.toString();
-        if (Buffer.byteLength(body) > 1_048_576) {
-          response.writeHead(413).end(layout('Too much text', '<h1>Too much text</h1>'));
-          return;
-        }
-      }
-      const status = new URLSearchParams(body).get('status');
+      const form = await readForm(request);
+      const status = form.get('status');
       if (!isFeatureStatus(status)) {
         response.writeHead(422).end(layout('Invalid status', '<h1>Choose new, developing, completed, or abandoned.</h1>'));
       } else if (!features.changeStatus(projectId, id, status)) {
@@ -69,27 +65,15 @@ const server = createServer(async (request, response) => {
           response.end(featureForm(project, '', existing, existing?.id));
           return;
         }
-        let body = '';
-        for await (const chunk of request) {
-          body += chunk.toString();
-          if (Buffer.byteLength(body) > 1_048_576) {
-            response.writeHead(413).end(layout('Too much text', '<h1>Too much text</h1>'));
-            return;
-          }
-        }
-        const form = new URLSearchParams(body);
+        const form = await readForm(request);
         const input = { title: (form.get('title') ?? '').trim(), description: form.get('description') ?? '', issue_url: (form.get('issue_url') ?? '').trim() };
         if (!input.title) {
           response.writeHead(422).end(featureForm(project, 'Give your feature a title.', input, existing?.id));
           return;
         }
-        if (input.issue_url) {
-          let valid = false;
-          try { valid = ['http:', 'https:'].includes(new URL(input.issue_url).protocol); } catch {}
-          if (!valid) {
-            response.writeHead(422).end(featureForm(project, 'Enter an HTTP or HTTPS issue URL.', input, existing?.id));
-            return;
-          }
+        if (input.issue_url && !isHttpUrl(input.issue_url)) {
+          response.writeHead(422).end(featureForm(project, 'Enter an HTTP or HTTPS issue URL.', input, existing?.id));
+          return;
         }
         const id = existing?.id ?? features.create(project.id, input);
         if (existing) features.edit(project.id, existing.id, input);
@@ -102,15 +86,8 @@ const server = createServer(async (request, response) => {
         response.writeHead(404).end(layout('Project not found', '<h1>Project not found</h1>'));
         return;
       }
-      let body = '';
-      for await (const chunk of request) {
-        body += chunk.toString();
-        if (Buffer.byteLength(body) > 1_048_576) {
-          response.writeHead(413).end(layout('Too much text', '<h1>Too much text</h1>'));
-          return;
-        }
-      }
-      const status = new URLSearchParams(body).get('status');
+      const form = await readForm(request);
+      const status = form.get('status');
       if (status !== 'experimenting' && status !== 'developing' && status !== 'abandoned') {
         response.writeHead(422).end(layout('Invalid status', `<h1>Choose experimenting, developing, or abandoned.</h1><a href="/projects/${id}">View project</a>`));
       } else if (!projects.changeStatus(id, status)) {
@@ -142,32 +119,17 @@ const server = createServer(async (request, response) => {
         response.writeHead(404).end(layout('Project not found', '<h1>Project not found</h1><a href="/">Home</a>'));
         return;
       }
-      let body = '';
-      for await (const chunk of request) {
-        body += chunk.toString();
-        if (Buffer.byteLength(body) > 1_048_576) {
-          response.writeHead(413).end(layout('Too much text', '<h1>Too much text</h1><a href="/">Home</a>'));
-          return;
-        }
-      }
-      const form = new URLSearchParams(body);
-      const input = { title: (form.get('title') ?? '').trim(), description: form.get('description') ?? '', repository_url: (form.get('repository_url') ?? '').trim() };
+      const form = await readForm(request);
+      const input = parseProjectInput(form);
       const status = existing?.status ?? form.get('status') ?? 'experimenting';
       if (status !== 'experimenting' && status !== 'developing' && !(existing && status === 'abandoned')) {
         response.writeHead(422).end(projectForm('Choose experimenting or developing.', input));
         return;
       }
-      if (!input.title) {
-        response.writeHead(422).end(projectForm('Give your project a title.', input, status, existing?.id));
+      const error = projectInputError(input);
+      if (error) {
+        response.writeHead(422).end(projectForm(error, input, status, existing?.id));
         return;
-      }
-      if (input.repository_url) {
-        let valid = false;
-        try { valid = ['http:', 'https:'].includes(new URL(input.repository_url).protocol); } catch {}
-        if (!valid) {
-          response.writeHead(422).end(projectForm('Enter an HTTP or HTTPS repository URL.', input, status, existing?.id));
-          return;
-        }
       }
       const id = existing?.id ?? projects.create(input, status);
       if (existing) projects.edit(id, input);
@@ -208,32 +170,17 @@ const server = createServer(async (request, response) => {
         response.writeHead(422).end(layout('Only new ideas can be promoted', `<h1>Only new ideas can be promoted</h1><a href="/ideas/${id}">View idea</a>`));
         return;
       }
-      let body = '';
-      for await (const chunk of request) {
-        body += chunk.toString();
-        if (Buffer.byteLength(body) > 1_048_576) {
-          response.writeHead(413).end(layout('Too much text', '<h1>Too much text</h1><a href="/">Home</a>'));
-          return;
-        }
-      }
-      const form = new URLSearchParams(body);
-      const input = { title: (form.get('title') ?? '').trim(), description: form.get('description') ?? '', repository_url: (form.get('repository_url') ?? '').trim() };
+      const form = await readForm(request);
+      const input = parseProjectInput(form);
       const status = form.get('status') ?? 'experimenting';
       if (status !== 'experimenting' && status !== 'developing') {
         response.writeHead(422).end(projectForm('Choose experimenting or developing.', input, 'experimenting', undefined, id));
         return;
       }
-      if (!input.title) {
-        response.writeHead(422).end(projectForm('Give your project a title.', input, status, undefined, id));
+      const error = projectInputError(input);
+      if (error) {
+        response.writeHead(422).end(projectForm(error, input, status, undefined, id));
         return;
-      }
-      if (input.repository_url) {
-        let valid = false;
-        try { valid = ['http:', 'https:'].includes(new URL(input.repository_url).protocol); } catch {}
-        if (!valid) {
-          response.writeHead(422).end(projectForm('Enter an HTTP or HTTPS repository URL.', input, status, undefined, id));
-          return;
-        }
       }
       const projectId = ideas.promote(id, input.title, input.description, input.repository_url, status);
       if (projectId === undefined) {
@@ -249,15 +196,7 @@ const server = createServer(async (request, response) => {
         response.writeHead(404).end(layout('Idea not found', '<h1>Idea not found</h1>'));
         return;
       }
-      let body = '';
-      for await (const chunk of request) {
-        body += chunk.toString();
-        if (Buffer.byteLength(body) > 1_048_576) {
-          response.writeHead(413).end(layout('Too much text', '<h1>Too much text</h1><p>Please keep your idea under 1 MB.</p><a href="/ideas/new">Add idea</a>'));
-          return;
-        }
-      }
-      const form = new URLSearchParams(body);
+      const form = await readForm(request);
       const title = (form.get('title') ?? '').trim();
       const description = form.get('description') ?? '';
       if (!title) {
@@ -277,6 +216,10 @@ const server = createServer(async (request, response) => {
       response.writeHead(404).end(layout('Page not found', '<h1>Page not found</h1><a href="/">All ideas</a>'));
     }
   } catch (error) {
+    if (error instanceof FormTooLargeError) {
+      response.writeHead(413).end(layout('Too much text', '<h1>Too much text</h1><p>Please keep your submission under 1 MB.</p><a href="/">Home</a>'));
+      return;
+    }
     console.error(error);
     if (!response.headersSent) response.writeHead(500).end(layout('Unable to save', '<h1>Something went wrong</h1><p>Please try again.</p><a href="/">All ideas</a>'));
     else response.end();
@@ -287,5 +230,5 @@ server.listen(Number(process.env.PORT ?? 3000), '0.0.0.0', () => {
   if (address && typeof address !== 'string') console.log(`Listening on http://0.0.0.0:${address.port}`);
 });
 for (const signal of ['SIGTERM', 'SIGINT']) {
-  process.on(signal, () => server.close(() => { features.close(); ideas.close(); projects.close(); }));
+  process.on(signal, () => server.close(() => { database.close(); }));
 }
