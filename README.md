@@ -15,8 +15,12 @@ abandoned projects. Metadata remains editable in every status. Capture features 
 detail view with a title, optional plain-text description, and optional issue URL.
 Features start as new; edit or clear their metadata and combine title search with
 status filtering, ordered by most recently updated. Abandoned projects retain editable
-features but must be restored before adding more. Features stay in their original
-project; status transitions follow in a later ticket. Issue links are manual references.
+features and their statuses but must be restored before adding features or changing
+feature status. Start new features as developing or abandon them; developing features
+can be completed, returned to new, or abandoned. Reopen completed features as developing
+and restore abandoned features to new. All statuses remain searchable and editable.
+Features stay in their original project. Issue links are optional manual references;
+starting work never needs an issue URL or triggers a GitHub action.
 Records have no permanent deletion action.
 
 ## Run with Docker
@@ -121,7 +125,7 @@ npm run test:browser -- --project=desktop -g 'missing and whitespace'
 The Docker test builds the image, publishes an isolated host port, captures an
 idea through the browser, edits and abandons it, reloads, restarts, replaces the container with the same
 mount, then stops it, copies the directory to a backup, restores that backup to
-a separate mount, and verifies the idea, a promoted idea and its linked project with independently edited contents, and abandoned and restored projects, including their repository links, statuses, and timestamps through the browser. It also verifies project-feature relationships and edited or cleared feature fields under an abandoned project.
+a separate mount, and verifies the idea, a promoted idea and its linked project with independently edited contents, and abandoned and restored projects, including their repository links, statuses, and timestamps through the browser. It also verifies project-feature relationships, edited or cleared feature fields, and all four feature statuses under an abandoned project. After each restart, replacement, and restore, it checks that adding features and changing feature statuses remain blocked.
 Temporary containers, images, and directories are removed afterward. Failed
 tests retain Playwright traces in `test-results/`.
 

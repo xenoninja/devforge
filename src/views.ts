@@ -1,3 +1,4 @@
+import { featureTransitions } from './features.js';
 import type { Feature, FeatureInput, FeatureStatusFilter } from './features.js';
 import type { Project, ProjectInput, ProjectStatusFilter } from './projects.js';
 import type { Idea, IdeaStatusFilter } from './ideas.js';
@@ -121,11 +122,11 @@ function featureList(project: Project, features: Feature[], status: FeatureStatu
   return `<section aria-labelledby="features-heading" class="project-section"><div class="section-heading"><h2 id="features-heading">Features</h2>
     ${project.status === 'abandoned' ? '<p>Restore this project before adding features.</p>' : `<a class="button" href="/projects/${project.id}/features/new">Add feature</a>`}</div>
     <form method="get" action="/projects/${project.id}">
-      <label for="feature-status">Feature status</label><select id="feature-status" name="status"><option value="all" ${status === 'all' ? 'selected' : ''}>All statuses</option><option value="new" ${status === 'new' ? 'selected' : ''}>New</option></select>
+      <label for="feature-status">Feature status</label><select id="feature-status" name="status">${['all', 'new', 'developing', 'completed', 'abandoned'].map(value => `<option value="${value}" ${value === status ? 'selected' : ''}>${value === 'all' ? 'All statuses' : value[0]!.toUpperCase() + value.slice(1)}</option>`).join('')}</select>
       <label for="feature-search">Search feature titles</label><input id="feature-search" name="search" type="search" value="${escape(search)}">
       <div class="actions"><button type="submit">Apply filters</button><a href="/projects/${project.id}">Clear filters</a></div>
     </form><p class="muted">Recently updated first</p>
-    ${features.length ? `<ul class="ideas">${features.map(feature => `<li><a href="/projects/${project.id}/features/${feature.id}">${escape(feature.title)}</a><span class="badge">New</span><p class="muted">Updated ${time(feature.updated_at)}</p></li>`).join('')}</ul>` : '<p>No matching features.</p>'}</section>`;
+    ${features.length ? `<ul class="ideas">${features.map(feature => `<li><a href="/projects/${project.id}/features/${feature.id}">${escape(feature.title)}</a><span class="badge">${feature.status[0]!.toUpperCase() + feature.status.slice(1)}</span><p class="muted">Updated ${time(feature.updated_at)}</p></li>`).join('')}</ul>` : '<p>No matching features.</p>'}</section>`;
 }
 
 export function featureForm(project: Project, error = '', input: FeatureInput = { title: '', description: '', issue_url: '' }, id?: number): string {
@@ -142,8 +143,13 @@ export function featureForm(project: Project, error = '', input: FeatureInput = 
 }
 
 export function featureDetail(project: Project, feature: Feature): string {
-  return layout(feature.title, `<a class="back" href="/projects/${project.id}">Back to project</a><p class="eyebrow">Feature in ${escape(project.title)}</p><h1>${escape(feature.title)}</h1><span class="badge">New</span>
+  return layout(feature.title, `<a class="back" href="/projects/${project.id}">Back to project</a><p class="eyebrow">Feature in ${escape(project.title)}</p><h1>${escape(feature.title)}</h1><span class="badge">${feature.status[0]!.toUpperCase() + feature.status.slice(1)}</span>
     <div class="actions"><a class="button" href="/projects/${project.id}/features/${feature.id}/edit">Edit feature</a></div>
+    ${project.status === 'abandoned' ? '<p>Restore this project before changing feature status.</p>' : `<form method="post" action="/projects/${project.id}/features/${feature.id}/status">
+      <label for="status">Change status</label><select id="status" name="status">
+      ${featureTransitions[feature.status].map(status => `<option value="${status}">${status[0]!.toUpperCase() + status.slice(1)}</option>`).join('')}</select>
+      <div class="actions"><button type="submit">Save status</button></div>
+    </form>`}
     <section class="detail"><h2>Description</h2>${feature.description ? `<p class="description">${escape(feature.description)}</p>` : '<p class="muted">No description yet.</p>'}</section>
     <section class="detail"><h2>Issue</h2>${feature.issue_url ? `<a class="repository" href="${escape(feature.issue_url)}" rel="noreferrer">${escape(feature.issue_url)}</a>` : '<p class="muted">No issue link yet.</p>'}</section>
     <dl class="timestamps"><div><dt>Created</dt><dd>${time(feature.created_at)}</dd></div><div><dt>Last updated</dt><dd>${time(feature.updated_at)}</dd></div></dl>`);

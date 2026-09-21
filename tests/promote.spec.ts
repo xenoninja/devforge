@@ -59,7 +59,7 @@ test('confirming promotion creates one linked project and keeps the idea findabl
   await page.getByLabel('Status', { exact: true }).selectOption('developing');
   await page.getByRole('button', { name: 'Save project' }).click();
   await expect(page.getByRole('heading', { name: 'Garden app' })).toBeVisible();
-  await expect(page.getByText('Developing', { exact: true })).toBeVisible();
+  await expect(page.locator('.badge').first()).toHaveText('Developing');
   await expect(page.getByText('Project notes.', { exact: true })).toBeVisible();
   await expect(page.getByText('No repository link yet.')).toBeVisible();
   await page.goto(appURL);

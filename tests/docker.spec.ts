@@ -47,7 +47,7 @@ test('ideas, projects and features survive container restart, replacement, and a
   async function verifyProject() {
     await page.goto(url);
     await page.getByRole('link', { name: 'Maintained project', exact: true }).click();
-    await expect(page.getByText('Developing', { exact: true })).toBeVisible();
+    await expect(page.locator('.badge').first()).toHaveText('Developing');
     await expect(page.getByText('Edited project notes.')).toBeVisible();
     await expect(page.getByRole('link', { name: 'https://github.com/example/retained' })).toHaveAttribute('href', 'https://github.com/example/retained');
     return page.locator('time').evaluateAll(elements => elements.map(el => el.getAttribute('datetime')));
@@ -65,10 +65,43 @@ test('ideas, projects and features survive container restart, replacement, and a
   async function verifyFeatures() {
     await page.goto(`${url}/projects?status=abandoned&search=Archived`);
     await page.getByRole('link', { name: 'Archived project', exact: true }).click();
-    await expect(page.getByRole('region', { name: 'Features' }).locator('li a')).toHaveText(['Refined feature', 'Cleared feature']);
+    await expect(page.getByRole('region', { name: 'Features' }).locator('li a')).toHaveText(['Abandoned feature', 'Completed feature', 'Refined feature', 'Cleared feature']);
     await expect(page.getByRole('link', { name: 'Add feature' })).toHaveCount(0);
+    const project = page.url();
+    expect((await page.goto(`${project}/features/new`))?.status()).toBe(409);
+    const retainedTimes: (string | null)[][] = [];
+    for (const [title, status, next] of [
+      ['Cleared feature', 'New', 'developing'],
+      ['Refined feature', 'Developing', 'completed'],
+      ['Completed feature', 'Completed', 'developing'],
+      ['Abandoned feature', 'Abandoned', 'new'],
+    ]) {
+      await page.goto(project);
+      await page.getByLabel('Feature status').selectOption(status!.toLowerCase());
+      await page.getByLabel('Search feature titles').fill(title!);
+      await page.getByRole('button', { name: 'Apply filters' }).click();
+      await expect(page.getByRole('region', { name: 'Features' }).locator('li a')).toHaveText([title!]);
+      await page.getByRole('link', { name: title!, exact: true }).click();
+      const feature = page.url();
+      await expect(page.locator('.badge')).toHaveText(status!);
+      await expect(page.getByLabel('Change status')).toHaveCount(0);
+      const before = await page.locator('time').evaluateAll(elements => elements.map(el => el.getAttribute('datetime')));
+      await page.getByRole('link', { name: 'Edit feature' }).click();
+      await page.locator('form').evaluate((form, args) => {
+        form.setAttribute('action', `${args.feature}/status`);
+        const input = document.createElement('input');
+        input.name = 'status'; input.value = args.next!; form.append(input);
+      }, { feature, next });
+      await page.getByRole('button', { name: 'Save feature' }).click();
+      await expect(page.getByRole('heading', { name: 'Cannot change feature status' })).toBeVisible();
+      await page.goto(feature);
+      await expect(page.locator('.badge')).toHaveText(status!);
+      expect(await page.locator('time').evaluateAll(elements => elements.map(el => el.getAttribute('datetime')))).toEqual(before);
+      retainedTimes.push(before);
+    }
+    await page.goto(project);
     await page.getByRole('link', { name: 'Refined feature', exact: true }).click();
-    await expect(page.getByText('New', { exact: true })).toBeVisible();
+    await expect(page.locator('.badge').first()).toHaveText('Developing');
     await expect(page.getByText('Edited feature notes.', { exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: 'https://github.com/example/deleted/issues/7' })).toHaveAttribute('href', 'https://github.com/example/deleted/issues/7');
     const times = await page.locator('time').evaluateAll(elements => elements.map(el => el.getAttribute('datetime')));
@@ -79,7 +112,7 @@ test('ideas, projects and features survive container restart, replacement, and a
     await page.goto(`${url}/projects?search=Maintained`);
     await page.getByRole('link', { name: 'Maintained project', exact: true }).click();
     await expect(page.getByRole('region', { name: 'Features' })).toContainText('No matching features.');
-    return times;
+    return { times, retainedTimes };
   }
 
   async function verifyPromotion() {
@@ -89,7 +122,7 @@ test('ideas, projects and features survive container restart, replacement, and a
     await expect(page.getByText('Idea notes after promotion.')).toBeVisible();
     await page.getByRole('link', { name: 'Promoted project' }).click();
     await expect(page.getByRole('heading', { name: 'Promoted project' })).toBeVisible();
-    await expect(page.getByText('Developing', { exact: true })).toBeVisible();
+    await expect(page.locator('.badge').first()).toHaveText('Developing');
     await expect(page.getByText('Project notes after promotion.')).toBeVisible();
     return page.locator('time').evaluateAll(elements => elements.map(el => el.getAttribute('datetime')));
   }
@@ -144,6 +177,23 @@ test('ideas, projects and features survive container restart, replacement, and a
       await page.getByRole('link', { name: 'Back to project' }).click();
       await expect(page).toHaveURL(archivedProject);
     }
+    await page.getByRole('link', { name: 'Refined feature', exact: true }).click();
+    await page.getByLabel('Change status').selectOption('developing');
+    await page.getByRole('button', { name: 'Save status' }).click();
+    for (const [title, statuses] of [
+      ['Completed feature', ['developing', 'completed']],
+      ['Abandoned feature', ['abandoned']],
+    ] as const) {
+      await page.goto(archivedProject);
+      await page.getByRole('link', { name: 'Add feature' }).click();
+      await page.getByLabel('Title', { exact: true }).fill(title);
+      await page.getByRole('button', { name: 'Save feature' }).click();
+      for (const status of statuses) {
+        await page.getByLabel('Change status').selectOption(status);
+        await page.getByRole('button', { name: 'Save status' }).click();
+      }
+    }
+    await page.goto(archivedProject);
     await page.getByLabel('Change status').selectOption('abandoned');
     await page.getByRole('button', { name: 'Save status' }).click();
     const abandonedTimes = await verifyAbandonedProject();

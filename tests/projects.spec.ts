@@ -37,7 +37,7 @@ test('edit a developing project, retain plain text and repository references, an
   await page.getByLabel('Repository URL').fill('https://github.com/example/unavailable');
   await page.getByRole('button', { name: 'Save project' }).click();
   const created = await page.locator('time').first().getAttribute('datetime');
-  await expect(page.getByText('Developing', { exact: true })).toBeVisible();
+  await expect(page.locator('.badge').first()).toHaveText('Developing');
   await page.getByRole('link', { name: 'Edit project' }).click();
   await page.locator('form').evaluate(form => form.setAttribute('novalidate', ''));
   await page.getByLabel('Title', { exact: true }).fill('   ');
@@ -65,7 +65,7 @@ test('edit a developing project, retain plain text and repository references, an
   await page.reload();
   await expect(page.getByText('No description yet.')).toBeVisible();
   await expect(page.getByText('No repository link yet.')).toBeVisible();
-  await expect(page.getByText('Developing', { exact: true })).toBeVisible();
+  await expect(page.locator('.badge').first()).toHaveText('Developing');
   expect(external).toEqual([]);
   await page.getByRole('link', { name: 'Home', exact: true }).click();
   await expect(page.getByRole('region', { name: /Developing projects/ }).getByRole('link', { name: 'Refined <project>' })).toBeVisible();

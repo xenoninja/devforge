@@ -6,11 +6,12 @@ import { join } from 'node:path';
 import { once } from 'node:events';
 import { DatabaseSync } from 'node:sqlite';
 
-export const test = base.extend<{ appURL: string; captureOnlyData: boolean; activeProjectsData: boolean; prePromotionData: boolean }>({
+export const test = base.extend<{ appURL: string; captureOnlyData: boolean; activeProjectsData: boolean; prePromotionData: boolean; newFeaturesData: boolean }>({
+  newFeaturesData: [false, { option: true }],
   captureOnlyData: [false, { option: true }],
   activeProjectsData: [false, { option: true }],
   prePromotionData: [false, { option: true }],
-  appURL: async ({ captureOnlyData, activeProjectsData, prePromotionData }, use) => {
+  appURL: async ({ captureOnlyData, activeProjectsData, prePromotionData, newFeaturesData }, use) => {
     const directory = await mkdtemp(join(tmpdir(), 'devforge-browser-'));
     if (captureOnlyData) {
       // The released capture-only schema is input to the upgrade; assertions remain in the browser.
@@ -75,6 +76,42 @@ export const test = base.extend<{ appURL: string; captureOnlyData: boolean; acti
           'https://github.com/example/legacy', 'experimenting',
           '2026-09-01T00:00:00.000Z', '2026-09-02T00:00:00.000Z');
         PRAGMA user_version = 2;
+      `);
+      database.close();
+    }
+    if (newFeaturesData) {
+      // Released v3 database is upgrade input; observe the migrated records through the browser.
+      const database = new DatabaseSync(join(directory, 'devforge.sqlite'));
+      database.exec(`
+        CREATE TABLE projects (
+          id INTEGER PRIMARY KEY, title TEXT NOT NULL CHECK(length(trim(title)) > 0),
+          description TEXT NOT NULL DEFAULT '', repository_url TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'experimenting' CHECK(status IN ('experimenting', 'developing', 'abandoned')),
+          created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+        ) STRICT;
+        CREATE TABLE ideas (
+          id INTEGER PRIMARY KEY, title TEXT NOT NULL CHECK(length(trim(title)) > 0),
+          description TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'new' CHECK(status IN ('new', 'abandoned', 'promoted')),
+          project_id INTEGER,
+          created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+          CHECK((status = 'promoted') = (project_id IS NOT NULL))
+        ) STRICT;
+        CREATE TABLE features (
+          id INTEGER PRIMARY KEY, project_id INTEGER NOT NULL REFERENCES projects(id),
+          title TEXT NOT NULL CHECK(length(trim(title)) > 0), description TEXT NOT NULL DEFAULT '',
+          issue_url TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'new' CHECK(status = 'new'),
+          created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+        ) STRICT;
+        CREATE INDEX features_project_updated ON features(project_id, updated_at DESC, id DESC);
+        INSERT INTO projects VALUES (12, 'Existing project', 'Original notes', '', 'abandoned',
+          '2026-09-01T00:00:00.000Z', '2026-09-02T00:00:00.000Z');
+        INSERT INTO ideas VALUES (7, 'Original idea', 'Idea notes', 'promoted', 12,
+          '2026-09-01T00:00:00.000Z', '2026-09-02T00:00:00.000Z');
+        INSERT INTO features VALUES (9, 12, 'Existing feature', 'Feature notes',
+          'https://github.com/example/legacy/issues/8', 'new',
+          '2026-09-01T00:00:00.000Z', '2026-09-02T00:00:00.000Z');
+        PRAGMA user_version = 3;
       `);
       database.close();
     }

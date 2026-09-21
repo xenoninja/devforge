@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
 import { Projects } from './projects.js';
-import { Features } from './features.js';
+import { Features, isFeatureStatus } from './features.js';
 import { Ideas } from './ideas.js';
 import { featureForm, featureDetail, home, ideaDetail, ideaForm, ideaList, layout, projectForm, projectDetail, projectList } from './views.js';
 
@@ -22,6 +22,27 @@ const server = createServer(async (request, response) => {
       response.end(stylesheet);
     } else if (request.method === 'GET' && path === '/') {
       response.end(home(ideas.list('new'), projects.list('experimenting'), projects.list('developing')));
+    } else if (request.method === 'POST' && /^\/projects\/\d+\/features\/\d+\/status$/.test(path)) {
+      const projectId = Number(path.split('/')[2]);
+      const id = Number(path.split('/')[4]);
+      if (!projects.get(projectId) || !features.get(projectId, id)) {
+        response.writeHead(404).end(layout('Feature not found', '<h1>Feature not found</h1>'));
+        return;
+      }
+      let body = '';
+      for await (const chunk of request) {
+        body += chunk.toString();
+        if (Buffer.byteLength(body) > 1_048_576) {
+          response.writeHead(413).end(layout('Too much text', '<h1>Too much text</h1>'));
+          return;
+        }
+      }
+      const status = new URLSearchParams(body).get('status');
+      if (!isFeatureStatus(status)) {
+        response.writeHead(422).end(layout('Invalid status', '<h1>Choose new, developing, completed, or abandoned.</h1>'));
+      } else if (!features.changeStatus(projectId, id, status)) {
+        response.writeHead(409).end(layout('Cannot change feature status', `<h1>Cannot change feature status</h1><p>The transition must be allowed and the project must be restored before changing feature status.</p><a href="/projects/${projectId}/features/${id}">View feature</a>`));
+      } else response.writeHead(303, { Location: `/projects/${projectId}/features/${id}` }).end();
     } else if (/^\/projects\/\d+\/features(?:\/(?:new|\d+(?:\/edit)?))?$/.test(path) && (request.method === 'GET' || request.method === 'POST')) {
       const project = projects.get(Number(path.split('/')[2]));
       if (!project) {
@@ -105,7 +126,8 @@ const server = createServer(async (request, response) => {
     } else if (request.method === 'GET' && /^\/projects\/\d+$/.test(path)) {
       const project = projects.get(Number(path.split('/')[2]));
       if (project) {
-        const status = url.searchParams.get('status') === 'new' ? 'new' : 'all';
+        const requestedStatus = url.searchParams.get('status');
+        const status = isFeatureStatus(requestedStatus) ? requestedStatus : 'all';
         const search = url.searchParams.get('search') ?? '';
         response.end(projectDetail(project, features.list(project.id, status, search), status, search));
       }
