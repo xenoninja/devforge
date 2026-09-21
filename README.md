@@ -1,141 +1,80 @@
 # Devforge
 
-A local, single-owner dashboard for ideas, projects, and features. Capture a required title and optional
-plain-text description, then find new ideas on home, most recently updated first.
-Creation and last-update times are recorded automatically and displayed in UTC.
-Edit ideas, abandon them while retaining their contents, and restore them to new.
-Promote a new idea into one linked project from a prefilled form; the idea stays
-editable and findable, and later title and description edits stay independent.
-Browse all ideas to combine status filters with title search. Create projects directly with an optional description and repository URL, defaulting
-to experimenting or selecting developing. Edit project details and clear optional
-values. Home groups projects by stage, most recently updated first. Repository links
-are manual references; the app never contacts GitHub. Move projects between experimenting, developing, and abandoned; restore them to either
-active stage. Browse all projects to combine status filters with title search, including
-abandoned projects. Metadata remains editable in every status. Capture features within each active project's
-detail view with a title, optional plain-text description, and optional issue URL.
-Features start as new; edit or clear their metadata and combine title search with
-status filtering, ordered by most recently updated. Abandoned projects retain editable
-features and their statuses but must be restored before adding features or changing
-feature status. Start new features as developing or abandon them; developing features
-can be completed, returned to new, or abandoned. Reopen completed features as developing
-and restore abandoned features to new. All statuses remain searchable and editable.
-Features stay in their original project. Issue links are optional manual references;
-starting work never needs an issue URL or triggers a GitHub action.
-Records have no permanent deletion action.
+**A home for your next idea, side project, and planned feature.**
 
-## Run with Docker
+Devforge is a self-hosted dashboard for solo developers. Capture ideas before
+there’s a repository, turn the promising ones into projects, and track the
+features you want to build—all in one place.
 
-Requires Docker Engine and Docker Compose.
+It runs locally, keeps your data in SQLite, and needs no account or external
+service.
+
+## What you can do
+
+- **Capture ideas** with a title and optional notes, then find them with search
+  and status filters.
+- **Turn ideas into projects** while keeping the original idea linked and
+  available. You can also create projects directly.
+- **Organize your projects** into experimenting and developing stages, with an
+  optional repository link for each.
+- **Track features** from new to developing to completed, with optional issue
+  links when you need them.
+- **Set work aside and return later.** Abandon ideas, projects, or features
+  without losing their contents, and restore them when you’re ready.
+- **Browse from your desktop or phone** on your local network.
+
+Repository and issue links are manual references. Devforge works independently
+of GitHub and doesn’t require GitHub credentials or sync changes to it.
+
+## Quick start
+
+With Docker Engine and Docker Compose installed:
 
 ```sh
+git clone https://github.com/xenoninja/devforge.git
+cd devforge
 mkdir -p data
 docker compose up --build -d
 ```
 
-Open <http://localhost:3000>. The application listens on `0.0.0.0:3000` inside the
-container; Compose publishes port 3000 on the host. From a phone or another
-computer on the same LAN, open `http://<host-LAN-IP>:3000`. Allow incoming TCP 3000
-in the host firewall if needed. No login or GitHub credentials are required.
-Anyone who can reach the application can access its data; use a trusted LAN.
+Open **<http://localhost:3000>** to capture your first idea.
 
-All durable application data is in `./data`, mounted at `/data` in the container.
-Keep this directory when upgrading or replacing containers:
+Your data lives in `./data` and persists when containers are replaced. Keep this
+directory when upgrading.
 
-```sh
-docker compose restart
-docker compose up --build --force-recreate -d
-```
+Devforge is designed for one owner on a trusted local network. There is no login;
+anyone who can reach the app can view and edit its data.
 
-To choose another host port or directory, set `PORT` and `DATA_DIR`, for example
-`PORT=3100 DATA_DIR=/absolute/path/to/ideas docker compose up --build -d`.
-Use the same values for subsequent Compose commands. The directory must be
-writable by the container. Run only one application container per data directory.
+For custom ports, phone access, upgrades, and backups, see the
+[deployment guide](docs/deployment.md).
 
-## Manual backup and restore
+## Local development
 
-Stop the container before copying **the whole data directory**. For the default
-Compose configuration, use a fresh backup destination each time:
-
-```sh
-docker compose stop
-mkdir -p backups
-cp -R data backups/ideas-2026-09-20
-docker compose start
-```
-
-Restore to a separate, previously nonexistent directory; do not copy over a live
-database or merge into an existing directory. This starts a separate container
-on port 3001, leaving the original mount intact:
-
-```sh
-cp -R backups/ideas-2026-09-20 restored-data
-DATA_DIR=./restored-data PORT=3001 docker compose -p devforge-restored up --build -d
-```
-
-Open <http://localhost:3001> and check the saved ideas, projects, and their features. Stop this restored instance
-with `DATA_DIR=./restored-data PORT=3001 docker compose -p devforge-restored down`.
-If using a custom directory, substitute that directory for `data` in the backup
-command and pass its `DATA_DIR` when stopping and starting the original instance.
-
-## Development
-
-Use Node.js 24 or newer and npm. The server uses Node's built-in HTTP and SQLite
-modules, server-rendered HTML, and a static stylesheet, with no runtime npm
-dependencies. SQLite stores records in `DATA_DIR/devforge.sqlite`. The container
-uses Node.js 24. No external service is involved in application operation.
+Requires **Node.js 24 or newer** and npm.
 
 ```sh
 npm ci
 npm run dev
 ```
 
-Open <http://localhost:3000>. Local development also defaults to `./data`; set
-`DATA_DIR` and `PORT` to use a separate dataset or port. Do not run development
-and Docker against the same directory concurrently.
+Open <http://localhost:3000>. To compile TypeScript edits as you work, run
+`npm run build:watch` in a second terminal. Restart `npm run dev` after stylesheet
+changes.
 
-`npm run dev` builds once and restarts the server when compiled code changes.
-Run `npm run build:watch` in a second terminal to compile TypeScript edits as you
-work. Restart `npm run dev` after stylesheet changes.
+Local development also uses `./data` by default. Set `DATA_DIR` to use a separate
+directory if Docker is running at the same time.
 
-## Acceptance tests
+Devforge uses TypeScript, Node’s built-in HTTP and SQLite modules,
+server-rendered HTML, and CSS, with no runtime npm dependencies. See the
+[development guide](docs/development.md) for test setup and commands.
 
-The shared test boundary is the running application's browser interface with
-real isolated storage, as agreed in [issue #1](https://github.com/xenoninja/devforge/issues/1).
-Tests never use your development data. Each browser test starts its own server
-with a fresh temporary directory and an automatically assigned port. Desktop and
-phone projects both run in Chromium; the phone project emulates the viewport and
-touch input, rather than a physical phone or Safari.
+## Contributing
 
-```sh
-npm ci
-npx playwright install chromium
-npm run typecheck
-npm run test:browser             # capture, editing, lifecycle, discovery, layouts
-npm run test:docker              # Docker daemon required
-npm test                        # full suite, including Docker
-```
+Bug reports and feature suggestions belong in
+[GitHub Issues](https://github.com/xenoninja/devforge/issues). For a bug, include
+steps to reproduce it and what you expected to happen. For a larger change, open
+an issue to discuss the approach first.
 
-On Linux, use `npx playwright install --with-deps chromium` if browser OS libraries
-are missing. Run a single file or case with:
-
-```sh
-npm run test:browser -- --project=desktop -g 'missing and whitespace'
-```
-
-The Docker test builds the image, publishes an isolated host port, captures an
-idea through the browser, edits and abandons it, reloads, restarts, replaces the container with the same
-mount, then stops it, copies the directory to a backup, restores that backup to
-a separate mount, and verifies the idea, a promoted idea and its linked project with independently edited contents, and abandoned and restored projects, including their repository links, statuses, and timestamps through the browser. It also verifies project-feature relationships, edited or cleared feature fields, and all four feature statuses under an abandoned project. After each restart, replacement, and restore, it checks that adding features and changing feature statuses remain blocked.
-Temporary containers, images, and directories are removed afterward. Failed
-tests retain Playwright traces in `test-results/`.
-
-LAN acceptance requires another physical device on the host's LAN; the automated
-suite checks the published host port but cannot establish physical-device LAN
-reachability. To verify manually, open the host LAN URL on a phone, add an idea,
-reload, and confirm that the same idea is visible on the host browser.
-
-Verification on 20 September 2026: desktop and phone browser checks, container
-restart and replacement, and stopped-directory backup/restore passed on macOS
-with OrbStack Docker. Rendered desktop and phone layouts were also inspected.
-Physical-device LAN access was not verified because a second device on the host
-LAN was unavailable in the implementation environment.
+To work on the code, follow the [development guide](docs/development.md).
+The [domain glossary](CONTEXT.md) and [architecture decisions](docs/adr/) explain
+the project’s terminology and design choices.
