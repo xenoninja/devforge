@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto';
 const exec = promisify(execFile);
 const docker = (...args: string[]) => exec('docker', args, { timeout: 180_000, maxBuffer: 4 * 1024 * 1024 });
 
-test('ideas and projects survive container restart, replacement, and a stopped-directory backup restored to a separate mount', async ({ page }) => {
+test('ideas, projects and features survive container restart, replacement, and a stopped-directory backup restored to a separate mount', async ({ page }) => {
   test.setTimeout(240_000);
   const id = randomUUID();
   const image = `devforge-test:${id}`;
@@ -56,10 +56,30 @@ test('ideas and projects survive container restart, replacement, and a stopped-d
   async function verifyAbandonedProject() {
     await page.goto(`${url}/projects?status=abandoned&search=Archived`);
     await page.getByRole('link', { name: 'Archived project', exact: true }).click();
-    await expect(page.locator('.badge')).toHaveText('Abandoned');
+    await expect(page.locator('.badge').first()).toHaveText('Abandoned');
     await expect(page.getByText('Archived notes.', { exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: 'https://github.com/example/deleted' })).toBeVisible();
     return page.locator('time').evaluateAll(elements => elements.map(el => el.getAttribute('datetime')));
+  }
+
+  async function verifyFeatures() {
+    await page.goto(`${url}/projects?status=abandoned&search=Archived`);
+    await page.getByRole('link', { name: 'Archived project', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Features' }).locator('li a')).toHaveText(['Refined feature', 'Cleared feature']);
+    await expect(page.getByRole('link', { name: 'Add feature' })).toHaveCount(0);
+    await page.getByRole('link', { name: 'Refined feature', exact: true }).click();
+    await expect(page.getByText('New', { exact: true })).toBeVisible();
+    await expect(page.getByText('Edited feature notes.', { exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'https://github.com/example/deleted/issues/7' })).toHaveAttribute('href', 'https://github.com/example/deleted/issues/7');
+    const times = await page.locator('time').evaluateAll(elements => elements.map(el => el.getAttribute('datetime')));
+    await page.getByRole('link', { name: 'Back to project' }).click();
+    await page.getByRole('link', { name: 'Cleared feature', exact: true }).click();
+    await expect(page.getByText('No description yet.')).toBeVisible();
+    await expect(page.getByText('No issue link yet.')).toBeVisible();
+    await page.goto(`${url}/projects?search=Maintained`);
+    await page.getByRole('link', { name: 'Maintained project', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Features' })).toContainText('No matching features.');
+    return times;
   }
 
   async function verifyPromotion() {
@@ -109,9 +129,25 @@ test('ideas and projects survive container restart, replacement, and a stopped-d
     await page.getByLabel('Description').fill('Archived notes.');
     await page.getByLabel('Repository URL').fill('https://github.com/example/deleted');
     await page.getByRole('button', { name: 'Save project' }).click();
+    const archivedProject = page.url();
+    for (const title of ['Cleared feature', 'Original feature']) {
+      await page.getByRole('link', { name: 'Add feature' }).click();
+      await page.getByLabel('Title', { exact: true }).fill(title);
+      await page.getByLabel('Description').fill('Original feature notes.');
+      await page.getByLabel('Issue URL').fill('https://github.com/example/original/issues/1');
+      await page.getByRole('button', { name: 'Save feature' }).click();
+      await page.getByRole('link', { name: 'Edit feature' }).click();
+      await page.getByLabel('Title', { exact: true }).fill(title === 'Original feature' ? 'Refined feature' : title);
+      await page.getByLabel('Description').fill(title === 'Original feature' ? 'Edited feature notes.' : '');
+      await page.getByLabel('Issue URL').fill(title === 'Original feature' ? 'https://github.com/example/deleted/issues/7' : '');
+      await page.getByRole('button', { name: 'Save feature' }).click();
+      await page.getByRole('link', { name: 'Back to project' }).click();
+      await expect(page).toHaveURL(archivedProject);
+    }
     await page.getByLabel('Change status').selectOption('abandoned');
     await page.getByRole('button', { name: 'Save status' }).click();
     const abandonedTimes = await verifyAbandonedProject();
+    const featureTimes = await verifyFeatures();
     await page.goto(`${url}/ideas/new`);
     await page.getByLabel('Title', { exact: true }).fill('Origin idea');
     await page.getByLabel('Description').fill('Original idea notes.');
@@ -137,6 +173,7 @@ test('ideas and projects survive container restart, replacement, and a stopped-d
     expect(await verifyProject()).toEqual(projectTimes);
     expect(await verifyAbandonedProject()).toEqual(abandonedTimes);
     expect(await verifyPromotion()).toEqual(promotionTimes);
+    expect(await verifyFeatures()).toEqual(featureTimes);
 
     await docker('stop', container);
     await docker('rm', container);
@@ -145,6 +182,7 @@ test('ideas and projects survive container restart, replacement, and a stopped-d
     expect(await verifyProject()).toEqual(projectTimes);
     expect(await verifyAbandonedProject()).toEqual(abandonedTimes);
     expect(await verifyPromotion()).toEqual(promotionTimes);
+    expect(await verifyFeatures()).toEqual(featureTimes);
 
     await docker('stop', container);
     await cp(data, backup, { recursive: true });
@@ -155,6 +193,7 @@ test('ideas and projects survive container restart, replacement, and a stopped-d
     expect(await verifyProject()).toEqual(projectTimes);
     expect(await verifyAbandonedProject()).toEqual(abandonedTimes);
     expect(await verifyPromotion()).toEqual(promotionTimes);
+    expect(await verifyFeatures()).toEqual(featureTimes);
   } finally {
     await docker('rm', '-f', container).catch(() => {});
     await docker('image', 'rm', image).catch(() => {});

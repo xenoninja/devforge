@@ -12,7 +12,7 @@
     "dev": "npm run build && node --watch dist/server.js",
     "start": "node dist/server.js",
     "test": "npm run build && playwright test",
-    "test:browser": "npm run build && playwright test tests/ideas.spec.ts tests/projects.spec.ts tests/promote.spec.ts",
+    "test:browser": "npm run build && playwright test tests/ideas.spec.ts tests/projects.spec.ts tests/promote.spec.ts tests/features.spec.ts",
     "test:docker": "npm run build && playwright test tests/docker.spec.ts --project=desktop"
   },
   "devDependencies": {

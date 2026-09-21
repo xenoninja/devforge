@@ -1,6 +1,6 @@
 # Devforge
 
-A local, single-owner dashboard for ideas and projects. Capture a required title and optional
+A local, single-owner dashboard for ideas, projects, and features. Capture a required title and optional
 plain-text description, then find new ideas on home, most recently updated first.
 Creation and last-update times are recorded automatically and displayed in UTC.
 Edit ideas, abandon them while retaining their contents, and restore them to new.
@@ -11,7 +11,13 @@ to experimenting or selecting developing. Edit project details and clear optiona
 values. Home groups projects by stage, most recently updated first. Repository links
 are manual references; the app never contacts GitHub. Move projects between experimenting, developing, and abandoned; restore them to either
 active stage. Browse all projects to combine status filters with title search, including
-abandoned projects. Metadata remains editable in every status. Features follow in later tickets. Records have no permanent deletion action.
+abandoned projects. Metadata remains editable in every status. Capture features within each active project's
+detail view with a title, optional plain-text description, and optional issue URL.
+Features start as new; edit or clear their metadata and combine title search with
+status filtering, ordered by most recently updated. Abandoned projects retain editable
+features but must be restored before adding more. Features stay in their original
+project; status transitions follow in a later ticket. Issue links are manual references.
+Records have no permanent deletion action.
 
 ## Run with Docker
 
@@ -62,7 +68,7 @@ cp -R backups/ideas-2026-09-20 restored-data
 DATA_DIR=./restored-data PORT=3001 docker compose -p devforge-restored up --build -d
 ```
 
-Open <http://localhost:3001> and check the saved ideas and projects. Stop this restored instance
+Open <http://localhost:3001> and check the saved ideas, projects, and their features. Stop this restored instance
 with `DATA_DIR=./restored-data PORT=3001 docker compose -p devforge-restored down`.
 If using a custom directory, substitute that directory for `data` in the backup
 command and pass its `DATA_DIR` when stopping and starting the original instance.
@@ -115,7 +121,7 @@ npm run test:browser -- --project=desktop -g 'missing and whitespace'
 The Docker test builds the image, publishes an isolated host port, captures an
 idea through the browser, edits and abandons it, reloads, restarts, replaces the container with the same
 mount, then stops it, copies the directory to a backup, restores that backup to
-a separate mount, and verifies the idea, a promoted idea and its linked project with independently edited contents, and abandoned and restored projects, including their repository links, statuses, and timestamps through the browser.
+a separate mount, and verifies the idea, a promoted idea and its linked project with independently edited contents, and abandoned and restored projects, including their repository links, statuses, and timestamps through the browser. It also verifies project-feature relationships and edited or cleared feature fields under an abandoned project.
 Temporary containers, images, and directories are removed afterward. Failed
 tests retain Playwright traces in `test-results/`.
 

@@ -1,11 +1,13 @@
 import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
 import { Projects } from './projects.js';
+import { Features } from './features.js';
 import { Ideas } from './ideas.js';
-import { home, ideaDetail, ideaForm, ideaList, layout, projectForm, projectDetail, projectList } from './views.js';
+import { featureForm, featureDetail, home, ideaDetail, ideaForm, ideaList, layout, projectForm, projectDetail, projectList } from './views.js';
 
 const ideas = new Ideas(process.env.DATA_DIR ?? './data');
 const projects = new Projects(process.env.DATA_DIR ?? './data');
+const features = new Features(process.env.DATA_DIR ?? './data');
 const stylesheet = readFileSync(new URL('../public/style.css', import.meta.url));
 const server = createServer(async (request, response) => {
   response.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -20,6 +22,59 @@ const server = createServer(async (request, response) => {
       response.end(stylesheet);
     } else if (request.method === 'GET' && path === '/') {
       response.end(home(ideas.list('new'), projects.list('experimenting'), projects.list('developing')));
+    } else if (/^\/projects\/\d+\/features(?:\/(?:new|\d+(?:\/edit)?))?$/.test(path) && (request.method === 'GET' || request.method === 'POST')) {
+      const project = projects.get(Number(path.split('/')[2]));
+      if (!project) {
+        response.writeHead(404).end(layout('Project not found', '<h1>Project not found</h1>'));
+        return;
+      }
+      const segment = path.split('/')[4];
+      const editing = path.endsWith('/edit');
+      const existing = editing ? features.get(project.id, Number(segment)) : undefined;
+      if (editing && !existing) {
+        response.writeHead(404).end(layout('Feature not found', '<h1>Feature not found</h1>'));
+        return;
+      }
+      if (request.method === 'GET' && segment && segment !== 'new' && !editing) {
+        const feature = features.get(project.id, Number(segment));
+        if (feature) response.end(featureDetail(project, feature));
+        else response.writeHead(404).end(layout('Feature not found', '<h1>Feature not found</h1>'));
+      } else if ((request.method === 'GET' && segment === 'new') || (request.method === 'POST' && !segment) || editing) {
+        if (!editing && project.status === 'abandoned') {
+          response.writeHead(409).end(layout('Restore project first', `<h1>Restore this project before adding features.</h1><a href="/projects/${project.id}">Back to project</a>`));
+          return;
+        }
+        if (request.method === 'GET') {
+          response.end(featureForm(project, '', existing, existing?.id));
+          return;
+        }
+        let body = '';
+        for await (const chunk of request) {
+          body += chunk.toString();
+          if (Buffer.byteLength(body) > 1_048_576) {
+            response.writeHead(413).end(layout('Too much text', '<h1>Too much text</h1>'));
+            return;
+          }
+        }
+        const form = new URLSearchParams(body);
+        const input = { title: (form.get('title') ?? '').trim(), description: form.get('description') ?? '', issue_url: (form.get('issue_url') ?? '').trim() };
+        if (!input.title) {
+          response.writeHead(422).end(featureForm(project, 'Give your feature a title.', input, existing?.id));
+          return;
+        }
+        if (input.issue_url) {
+          let valid = false;
+          try { valid = ['http:', 'https:'].includes(new URL(input.issue_url).protocol); } catch {}
+          if (!valid) {
+            response.writeHead(422).end(featureForm(project, 'Enter an HTTP or HTTPS issue URL.', input, existing?.id));
+            return;
+          }
+        }
+        const id = existing?.id ?? features.create(project.id, input);
+        if (existing) features.edit(project.id, existing.id, input);
+        if (id === undefined) response.writeHead(409).end(layout('Restore project first', '<h1>Restore this project before adding features.</h1>'));
+        else response.writeHead(303, { Location: `/projects/${project.id}/features/${id}` }).end();
+      } else response.writeHead(404).end(layout('Page not found', '<h1>Page not found</h1>'));
     } else if (request.method === 'POST' && /^\/projects\/\d+\/status$/.test(path)) {
       const id = Number(path.split('/')[2]);
       if (!projects.get(id)) {
@@ -49,7 +104,11 @@ const server = createServer(async (request, response) => {
       response.end(projectForm());
     } else if (request.method === 'GET' && /^\/projects\/\d+$/.test(path)) {
       const project = projects.get(Number(path.split('/')[2]));
-      if (project) response.end(projectDetail(project));
+      if (project) {
+        const status = url.searchParams.get('status') === 'new' ? 'new' : 'all';
+        const search = url.searchParams.get('search') ?? '';
+        response.end(projectDetail(project, features.list(project.id, status, search), status, search));
+      }
       else response.writeHead(404).end(layout('Project not found', '<h1>Project not found</h1><a href="/">Home</a>'));
     } else if (request.method === 'GET' && /^\/projects\/\d+\/edit$/.test(path)) {
       const project = projects.get(Number(path.split('/')[2]));
@@ -206,5 +265,5 @@ server.listen(Number(process.env.PORT ?? 3000), '0.0.0.0', () => {
   if (address && typeof address !== 'string') console.log(`Listening on http://0.0.0.0:${address.port}`);
 });
 for (const signal of ['SIGTERM', 'SIGINT']) {
-  process.on(signal, () => server.close(() => { ideas.close(); projects.close(); }));
+  process.on(signal, () => server.close(() => { features.close(); ideas.close(); projects.close(); }));
 }

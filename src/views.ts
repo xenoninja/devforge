@@ -1,3 +1,4 @@
+import type { Feature, FeatureInput, FeatureStatusFilter } from './features.js';
 import type { Project, ProjectInput, ProjectStatusFilter } from './projects.js';
 import type { Idea, IdeaStatusFilter } from './ideas.js';
 
@@ -91,7 +92,7 @@ export function projectForm(error = '', input: ProjectInput = { title: '', descr
     <div class="actions"><button type="submit">Save project</button><a href="${cancel}">Cancel</a></div></form>`);
 }
 
-export function projectDetail(project: Project): string {
+export function projectDetail(project: Project, features: Feature[] = [], status: FeatureStatusFilter = 'all', search = ''): string {
   return layout(project.title, `<a class="back" href="/">Home</a><a class="back" href="/projects">All projects</a><p class="eyebrow">Project</p><h1>${escape(project.title)}</h1><span class="badge">${project.status === 'experimenting' ? 'Experimenting' : project.status === 'developing' ? 'Developing' : 'Abandoned'}</span>
     <div class="actions"><a class="button" href="/projects/${project.id}/edit">Edit project</a></div>
     <form method="post" action="/projects/${project.id}/status">
@@ -101,7 +102,7 @@ export function projectDetail(project: Project): string {
     </form>
     <section class="detail"><h2>Description</h2>${project.description ? `<p class="description">${escape(project.description)}</p>` : '<p class="muted">No description yet.</p>'}</section>
     <section class="detail"><h2>Repository</h2>${project.repository_url ? `<a class="repository" href="${escape(project.repository_url)}" rel="noreferrer">${escape(project.repository_url)}</a>` : '<p class="muted">No repository link yet.</p>'}</section>
-    <dl class="timestamps"><div><dt>Created</dt><dd>${time(project.created_at)}</dd></div><div><dt>Last updated</dt><dd>${time(project.updated_at)}</dd></div></dl>`);
+    <dl class="timestamps"><div><dt>Created</dt><dd>${time(project.created_at)}</dd></div><div><dt>Last updated</dt><dd>${time(project.updated_at)}</dd></div></dl>${featureList(project, features, status, search)}`);
 }
 
 export function projectList(projects: Project[], status: ProjectStatusFilter, search: string): string {
@@ -114,4 +115,36 @@ export function projectList(projects: Project[], status: ProjectStatusFilter, se
       <div class="actions"><button type="submit">Apply filters</button><a href="/projects">Clear filters</a></div>
     </form><p class="muted">Recently updated first</p>
     ${projects.length ? `<ul class="ideas">${projects.map(project => `<li><a href="/projects/${project.id}">${escape(project.title)}</a><span class="badge">${project.status[0]!.toUpperCase() + project.status.slice(1)}</span><p class="muted">Updated ${time(project.updated_at)}</p></li>`).join('')}</ul>` : '<p>No matching projects.</p>'}`);
+}
+
+function featureList(project: Project, features: Feature[], status: FeatureStatusFilter, search: string): string {
+  return `<section aria-labelledby="features-heading" class="project-section"><div class="section-heading"><h2 id="features-heading">Features</h2>
+    ${project.status === 'abandoned' ? '<p>Restore this project before adding features.</p>' : `<a class="button" href="/projects/${project.id}/features/new">Add feature</a>`}</div>
+    <form method="get" action="/projects/${project.id}">
+      <label for="feature-status">Feature status</label><select id="feature-status" name="status"><option value="all" ${status === 'all' ? 'selected' : ''}>All statuses</option><option value="new" ${status === 'new' ? 'selected' : ''}>New</option></select>
+      <label for="feature-search">Search feature titles</label><input id="feature-search" name="search" type="search" value="${escape(search)}">
+      <div class="actions"><button type="submit">Apply filters</button><a href="/projects/${project.id}">Clear filters</a></div>
+    </form><p class="muted">Recently updated first</p>
+    ${features.length ? `<ul class="ideas">${features.map(feature => `<li><a href="/projects/${project.id}/features/${feature.id}">${escape(feature.title)}</a><span class="badge">New</span><p class="muted">Updated ${time(feature.updated_at)}</p></li>`).join('')}</ul>` : '<p>No matching features.</p>'}</section>`;
+}
+
+export function featureForm(project: Project, error = '', input: FeatureInput = { title: '', description: '', issue_url: '' }, id?: number): string {
+  const editing = id !== undefined;
+  const base = `/projects/${project.id}`;
+  return layout(editing ? 'Edit feature' : 'Add feature', `<a class="back" href="${base}">Back to project</a><p class="eyebrow">${escape(project.title)}</p><h1>${editing ? 'Edit feature' : 'Add a feature'}</h1>
+    <form method="post" action="${base}/features${editing ? `/${id}/edit` : ''}">
+    ${error ? `<p class="error" role="alert">${escape(error)}</p>` : ''}
+    <label for="title">Title</label><input id="title" name="title" required value="${escape(input.title)}">
+    <label for="description">Description <span class="muted">(optional, plain text)</span></label><textarea id="description" name="description" rows="7">\n${escape(input.description)}</textarea>
+    <label for="issue-url">Issue URL <span class="muted">(optional)</span></label><input id="issue-url" name="issue_url" type="url" value="${escape(input.issue_url)}" aria-describedby="issue-hint">
+    <p class="hint" id="issue-hint">A manually maintained reference. No GitHub connection is needed.</p>
+    <div class="actions"><button type="submit">Save feature</button><a href="${base}${editing ? `/features/${id}` : ''}">Cancel</a></div></form>`);
+}
+
+export function featureDetail(project: Project, feature: Feature): string {
+  return layout(feature.title, `<a class="back" href="/projects/${project.id}">Back to project</a><p class="eyebrow">Feature in ${escape(project.title)}</p><h1>${escape(feature.title)}</h1><span class="badge">New</span>
+    <div class="actions"><a class="button" href="/projects/${project.id}/features/${feature.id}/edit">Edit feature</a></div>
+    <section class="detail"><h2>Description</h2>${feature.description ? `<p class="description">${escape(feature.description)}</p>` : '<p class="muted">No description yet.</p>'}</section>
+    <section class="detail"><h2>Issue</h2>${feature.issue_url ? `<a class="repository" href="${escape(feature.issue_url)}" rel="noreferrer">${escape(feature.issue_url)}</a>` : '<p class="muted">No issue link yet.</p>'}</section>
+    <dl class="timestamps"><div><dt>Created</dt><dd>${time(feature.created_at)}</dd></div><div><dt>Last updated</dt><dd>${time(feature.updated_at)}</dd></div></dl>`);
 }
